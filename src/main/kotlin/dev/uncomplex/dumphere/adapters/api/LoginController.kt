@@ -25,7 +25,7 @@ class LoginController(
         ) {
             val savedRequest = requestCache.getRequest(request, response)
             requestCache.removeRequest(request, response)
-            response.sendRedirect(savedRequest?.redirectUrl?.substringBefore('?') ?: "/login/success")
+            response.sendRedirect(savedRequest?.redirectUrl ?: "/login/success")
             return null
         }
 
