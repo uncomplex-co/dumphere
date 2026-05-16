@@ -100,6 +100,30 @@ class HtmlPageStore(
         return page
     }
 
+    @Transactional
+    fun edit(
+        id: String,
+        oldString: String,
+        newString: String,
+        replaceAll: Boolean,
+        updatedBy: AuthenticatedUser?,
+    ): PublishedPage? {
+        if (!id.matches(ID_PATTERN)) return null
+
+        val currentHtml = readHtml(id) ?: return null
+        val nextHtml =
+            if (oldString.isEmpty()) {
+                require(oldString != newString) {
+                    "No changes to apply: oldString and newString are identical."
+                }
+                newString
+            } else {
+                HtmlDocumentEditor.applyWithOriginalLineEndings(currentHtml, oldString, newString, replaceAll)
+            }
+
+        return update(id, null, nextHtml, updatedBy)
+    }
+
     fun readMetadata(id: String): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
