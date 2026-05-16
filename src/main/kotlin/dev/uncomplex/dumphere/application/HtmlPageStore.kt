@@ -72,7 +72,6 @@ class HtmlPageStore(
     @Transactional
     fun update(
         id: String,
-        title: String?,
         contents: String,
         updatedBy: AuthenticatedUser?,
     ): PublishedPage? {
@@ -90,7 +89,6 @@ class HtmlPageStore(
         val user = updatedBy?.let { userProvisioning.provision(it) }
         val page =
             existing.copy(
-                title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: existing.title,
                 updatedAt = now,
                 version = existing.version + 1,
                 bytes = bytes.size.toLong(),
@@ -123,7 +121,7 @@ class HtmlPageStore(
                 HtmlDocumentEditor.applyWithOriginalLineEndings(currentContents, oldString, newString, replaceAll)
             }
 
-        return update(id, null, nextContents, updatedBy)
+        return update(id, nextContents, updatedBy)
     }
 
     fun readMetadata(id: String): PublishedPage? {

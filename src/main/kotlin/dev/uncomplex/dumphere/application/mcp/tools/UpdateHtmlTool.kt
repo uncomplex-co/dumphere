@@ -12,7 +12,6 @@ class UpdateHtmlTool(
     fun execute(
         id: String,
         html: String,
-        title: String?,
         user: AuthenticatedUser?,
-    ): PublishedPage = requireNotNull(store.update(id, title, html, user)) { "page not found: $id" }
+    ): PublishedPage = requireNotNull(store.update(id, html, user)) { "page not found: $id" }
 }

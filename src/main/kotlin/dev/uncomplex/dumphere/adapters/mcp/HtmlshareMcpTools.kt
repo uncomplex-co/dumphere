@@ -27,9 +27,9 @@ class HtmlshareMcpTools(
         html: String,
         @McpToolParam(description = "Content format: html or markdown", required = true)
         format: String,
-        @McpToolParam(description = "Short human-readable page title", required = false)
-        title: String?,
-    ): PublishedPage = publishHtmlTool.execute(html, format, title, currentUser())
+        @McpToolParam(description = "Short human-readable file name", required = false)
+        file_name: String?,
+    ): PublishedPage = publishHtmlTool.execute(html, format, file_name, currentUser())
 
     @McpTool(
         name = "read_file_contents",
@@ -56,16 +56,14 @@ class HtmlshareMcpTools(
 
     @McpTool(
         name = "update_html",
-        description = "Replace an existing published HTML or Markdown page and return the same link",
+        description = "Replace an existing published HTML or Markdown page contents and return the same link",
     )
     fun updateHtml(
         @McpToolParam(description = "Published page id", required = true)
         id: String,
         @McpToolParam(description = "Replacement HTML or Markdown document or fragment", required = true)
         html: String,
-        @McpToolParam(description = "Optional replacement title", required = false)
-        title: String?,
-    ): PublishedPage = updateHtmlTool.execute(id, html, title, currentUser())
+    ): PublishedPage = updateHtmlTool.execute(id, html, currentUser())
 
     @McpTool(
         name = "edit_file_contents",

@@ -56,13 +56,11 @@ class HtmlPageController(
         @RequestBody request: UpdatePageRequest,
         authentication: Authentication,
     ): ResponseEntity<PublishedPage> {
-        val page =
-            store.update(id, request.title, request.html, authentication.authenticatedUser()) ?: return ResponseEntity.notFound().build()
+        val page = store.update(id, request.html, authentication.authenticatedUser()) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(page)
     }
 }
 
 data class UpdatePageRequest(
     val html: String,
-    val title: String? = null,
 )
