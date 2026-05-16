@@ -22,10 +22,8 @@ data class HtmlPageEntity(
     val url: String,
     val contentFormat: PageContentFormat,
     val createdAt: Instant,
-    val createdBy: String? = null,
     val createdByUserId: Long? = null,
     val updatedAt: Instant? = null,
-    val updatedBy: String? = null,
     val updatedByUserId: Long? = null,
     val currentVersion: Int,
     val currentBytes: Long,
@@ -39,6 +37,5 @@ data class HtmlPageVersionEntity(
     val html: String,
     val bytes: Long,
     val createdAt: Instant,
-    val createdBy: String? = null,
     val createdByUserId: Long? = null,
 )

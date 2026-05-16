@@ -50,13 +50,12 @@ class HtmlPageStore(
                 url = "${properties.publicBaseUrl.trimEnd('/')}/p/$id",
                 contentFormat = contentFormat,
                 createdAt = now,
-                createdBy = user?.email ?: user?.subject,
                 version = 1,
                 bytes = bytes.size.toLong(),
             )
 
         jdbcAggregateTemplate.insert(page.toEntity(createdByUserId = user?.id))
-        versions.save(page.toVersionEntity(contents, user?.id))
+        versions.save(page.toVersionEntity(contents, page.createdAt, user?.id))
 
         return page
     }
@@ -93,12 +92,11 @@ class HtmlPageStore(
             existing.copy(
                 title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: existing.title,
                 updatedAt = now,
-                updatedBy = user?.email ?: user?.subject,
                 version = existing.version + 1,
                 bytes = bytes.size.toLong(),
             )
 
-        versions.save(page.toVersionEntity(contents, user?.id))
+        versions.save(page.toVersionEntity(contents, now, user?.id))
         pages.save(page.toEntity(createdByUserId = existingEntity?.createdByUserId, updatedByUserId = user?.id))
 
         return page
@@ -143,10 +141,8 @@ class HtmlPageStore(
         url = url,
         contentFormat = contentFormat,
         createdAt = createdAt,
-        createdBy = createdBy,
         createdByUserId = createdByUserId,
         updatedAt = updatedAt,
-        updatedBy = updatedBy,
         updatedByUserId = updatedByUserId,
         currentVersion = version,
         currentBytes = bytes,
@@ -154,14 +150,14 @@ class HtmlPageStore(
 
     private fun PublishedPage.toVersionEntity(
         contents: String,
+        recordedAt: Instant,
         createdByUserId: Long?,
     ) = HtmlPageVersionEntity(
         pageId = id,
         version = version,
         html = contents,
         bytes = bytes,
-        createdAt = updatedAt ?: createdAt,
-        createdBy = updatedBy ?: createdBy,
+        createdAt = recordedAt,
         createdByUserId = createdByUserId,
     )
 
@@ -172,9 +168,7 @@ class HtmlPageStore(
             url = url,
             contentFormat = contentFormat,
             createdAt = createdAt,
-            createdBy = createdBy,
             updatedAt = updatedAt,
-            updatedBy = updatedBy,
             version = currentVersion,
             bytes = currentBytes,
         )
