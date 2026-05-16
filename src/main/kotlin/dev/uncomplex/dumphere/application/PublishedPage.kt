@@ -1,4 +1,4 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.application
 
 import java.time.Instant
 

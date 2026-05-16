@@ -1,6 +1,8 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.application
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import dev.uncomplex.dumphere.ports.HtmlPageRepository
+import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
 import org.springframework.data.jdbc.core.JdbcAggregateTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -15,7 +17,7 @@ import kotlin.io.path.inputStream
 
 @Service
 class HtmlPageStore(
-    private val properties: HtmlshareProperties,
+    private val properties: DumpHereApplicationProperties,
     private val objectMapper: ObjectMapper,
     private val pages: HtmlPageRepository,
     private val versions: HtmlPageVersionRepository,
@@ -26,7 +28,11 @@ class HtmlPageStore(
     private val storageDir: Path = Path.of(properties.storageDir).toAbsolutePath().normalize()
 
     @Transactional
-    fun publish(title: String?, html: String, createdBy: AuthenticatedUser?): PublishedPage {
+    fun publish(
+        title: String?,
+        html: String,
+        createdBy: AuthenticatedUser?,
+    ): PublishedPage {
         val bytes = html.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty()) { "html must not be empty" }
         require(bytes.size <= properties.maxHtmlBytes) {
@@ -36,15 +42,16 @@ class HtmlPageStore(
         val id = newId()
         val now = Instant.now()
         val user = createdBy?.let { userProvisioning.provision(it) }
-        val page = PublishedPage(
-            id = id,
-            title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: "Untitled HTML page",
-            url = "${properties.publicBaseUrl.trimEnd('/')}/p/$id",
-            createdAt = now,
-            createdBy = user?.email ?: user?.subject,
-            version = 1,
-            bytes = bytes.size.toLong(),
-        )
+        val page =
+            PublishedPage(
+                id = id,
+                title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: "Untitled HTML page",
+                url = "${properties.publicBaseUrl.trimEnd('/')}/p/$id",
+                createdAt = now,
+                createdBy = user?.email ?: user?.subject,
+                version = 1,
+                bytes = bytes.size.toLong(),
+            )
 
         jdbcAggregateTemplate.insert(page.toEntity(createdByUserId = user?.id))
         versions.save(page.toVersionEntity(html, user?.id))
@@ -60,7 +67,12 @@ class HtmlPageStore(
     }
 
     @Transactional
-    fun update(id: String, title: String?, html: String, updatedBy: AuthenticatedUser?): PublishedPage? {
+    fun update(
+        id: String,
+        title: String?,
+        html: String,
+        updatedBy: AuthenticatedUser?,
+    ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
         val existingEntity = pages.findById(id).orElse(null)
@@ -73,13 +85,14 @@ class HtmlPageStore(
 
         val now = Instant.now()
         val user = updatedBy?.let { userProvisioning.provision(it) }
-        val page = existing.copy(
-            title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: existing.title,
-            updatedAt = now,
-            updatedBy = user?.email ?: user?.subject,
-            version = existing.version + 1,
-            bytes = bytes.size.toLong(),
-        )
+        val page =
+            existing.copy(
+                title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: existing.title,
+                updatedAt = now,
+                updatedBy = user?.email ?: user?.subject,
+                version = existing.version + 1,
+                bytes = bytes.size.toLong(),
+            )
 
         versions.save(page.toVersionEntity(html, user?.id))
         pages.save(page.toEntity(createdByUserId = existingEntity?.createdByUserId, updatedByUserId = user?.id))
@@ -93,7 +106,10 @@ class HtmlPageStore(
         return pages.findById(id).map { it.toPublishedPage() }.orElseGet { readLegacyMetadata(id) }
     }
 
-    private fun PublishedPage.toEntity(createdByUserId: Long? = null, updatedByUserId: Long? = null) = HtmlPageEntity(
+    private fun PublishedPage.toEntity(
+        createdByUserId: Long? = null,
+        updatedByUserId: Long? = null,
+    ) = HtmlPageEntity(
         id = id,
         title = title,
         url = url,
@@ -107,7 +123,10 @@ class HtmlPageStore(
         currentBytes = bytes,
     )
 
-    private fun PublishedPage.toVersionEntity(html: String, createdByUserId: Long?) = HtmlPageVersionEntity(
+    private fun PublishedPage.toVersionEntity(
+        html: String,
+        createdByUserId: Long?,
+    ) = HtmlPageVersionEntity(
         pageId = id,
         version = version,
         html = html,
@@ -117,17 +136,18 @@ class HtmlPageStore(
         createdByUserId = createdByUserId,
     )
 
-    private fun HtmlPageEntity.toPublishedPage() = PublishedPage(
-        id = id,
-        title = title,
-        url = url,
-        createdAt = createdAt,
-        createdBy = createdBy,
-        updatedAt = updatedAt,
-        updatedBy = updatedBy,
-        version = currentVersion,
-        bytes = currentBytes,
-    )
+    private fun HtmlPageEntity.toPublishedPage() =
+        PublishedPage(
+            id = id,
+            title = title,
+            url = url,
+            createdAt = createdAt,
+            createdBy = createdBy,
+            updatedAt = updatedAt,
+            updatedBy = updatedBy,
+            version = currentVersion,
+            bytes = currentBytes,
+        )
 
     private fun readLegacyHtml(id: String): String? {
         val path = legacyHtmlPath(id)

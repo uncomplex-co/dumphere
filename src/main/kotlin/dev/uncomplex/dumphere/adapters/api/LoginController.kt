@@ -1,5 +1,6 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.application.authenticatedUser
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.MediaType
@@ -19,7 +20,9 @@ class LoginController(
         response: HttpServletResponse,
         authentication: Authentication?,
     ): String? {
-        if (authentication != null && authentication.isAuthenticated && authentication !is AnonymousAuthenticationToken && authentication.authenticatedUser() != null) {
+        if (authentication != null && authentication.isAuthenticated && authentication !is AnonymousAuthenticationToken &&
+            authentication.authenticatedUser() != null
+        ) {
             val savedRequest = requestCache.getRequest(request, response)
             requestCache.removeRequest(request, response)
             response.sendRedirect(savedRequest?.redirectUrl?.substringBefore('?') ?: "/login/success")
@@ -49,7 +52,7 @@ class LoginController(
               </main>
             </body>
             </html>
-        """.trimIndent()
+            """.trimIndent()
     }
 
     @GetMapping("/login/success", produces = [MediaType.TEXT_PLAIN_VALUE])

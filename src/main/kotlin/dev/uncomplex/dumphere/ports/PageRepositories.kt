@@ -1,5 +1,8 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.ports
 
+import dev.uncomplex.dumphere.application.HtmlPageEntity
+import dev.uncomplex.dumphere.application.HtmlPageVersionEntity
+import dev.uncomplex.dumphere.application.UserEntity
 import org.springframework.data.repository.CrudRepository
 
 interface UserRepository : CrudRepository<UserEntity, Long> {
@@ -9,5 +12,8 @@ interface UserRepository : CrudRepository<UserEntity, Long> {
 interface HtmlPageRepository : CrudRepository<HtmlPageEntity, String>
 
 interface HtmlPageVersionRepository : CrudRepository<HtmlPageVersionEntity, Long> {
-    fun findByPageIdAndVersion(pageId: String, version: Int): HtmlPageVersionEntity?
+    fun findByPageIdAndVersion(
+        pageId: String,
+        version: Int,
+    ): HtmlPageVersionEntity?
 }

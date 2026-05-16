@@ -63,6 +63,6 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
-tasks.matching { it.name in setOf("processAot", "compileAotKotlin", "compileAotJava", "processAotResources") }.configureEach {
+tasks.matching { it.name in setOf("processAot", "compileAotKotlin", "compileAotJava", "processAotResources", "processTestAot", "compileTestAotKotlin", "compileTestAotJava", "processTestAotResources") }.configureEach {
     enabled = false
 }

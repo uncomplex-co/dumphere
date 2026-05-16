@@ -1,9 +1,9 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.application
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties(prefix = "htmlshare")
-data class HtmlshareProperties(
+data class DumpHereApplicationProperties(
     val storageDir: String,
     val publicBaseUrl: String,
     val maxHtmlBytes: Long,

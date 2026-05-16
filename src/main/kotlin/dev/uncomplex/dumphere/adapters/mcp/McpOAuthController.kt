@@ -1,10 +1,9 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.adapters.mcp
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestHeader
@@ -29,27 +28,29 @@ class McpOAuthController(
         response: HttpServletResponse,
     ) {
         try {
-            val authorizationRequest = mcpOAuthService.validateAuthorizationRequest(
-                responseType = responseType,
-                clientId = clientId,
-                redirectUri = redirectUri,
-                state = state,
-                codeChallenge = codeChallenge,
-                codeChallengeMethod = codeChallengeMethod,
-                scope = scope,
-            )
+            val authorizationRequest =
+                mcpOAuthService.validateAuthorizationRequest(
+                    responseType = responseType,
+                    clientId = clientId,
+                    redirectUri = redirectUri,
+                    state = state,
+                    codeChallenge = codeChallenge,
+                    codeChallengeMethod = codeChallengeMethod,
+                    scope = scope,
+                )
             request.session.setAttribute(McpAuthorizationRequest.sessionKey(authorizationRequest.state), authorizationRequest)
             response.sendRedirect("/oauth2/consent?state=${authorizationRequest.state}")
         } catch (error: OAuthRequestException) {
             if (error.redirectUri != null && !state.isNullOrBlank() && !clientId.isNullOrBlank()) {
-                val fallback = McpAuthorizationRequest(
-                    clientId = clientId,
-                    clientName = "this MCP client",
-                    redirectUri = error.redirectUri,
-                    state = state,
-                    codeChallenge = codeChallenge.orEmpty(),
-                    requestedScopes = emptySet(),
-                )
+                val fallback =
+                    McpAuthorizationRequest(
+                        clientId = clientId,
+                        clientName = "this MCP client",
+                        redirectUri = error.redirectUri,
+                        state = state,
+                        codeChallenge = codeChallenge.orEmpty(),
+                        requestedScopes = emptySet(),
+                    )
                 response.sendRedirect(mcpOAuthService.authorizationErrorRedirect(fallback, error.error))
             } else {
                 response.sendError(HttpServletResponse.SC_BAD_REQUEST, error.message)
@@ -73,14 +74,15 @@ class McpOAuthController(
         }
 
         return try {
-            val token = mcpOAuthService.exchangeAuthorizationCode(
-                code = code,
-                redirectUri = redirectUri,
-                codeVerifier = codeVerifier,
-                authorizationHeader = authorizationHeader,
-                clientIdParam = clientId,
-                clientSecretParam = clientSecret,
-            )
+            val token =
+                mcpOAuthService.exchangeAuthorizationCode(
+                    code = code,
+                    redirectUri = redirectUri,
+                    codeVerifier = codeVerifier,
+                    authorizationHeader = authorizationHeader,
+                    clientIdParam = clientId,
+                    clientSecretParam = clientSecret,
+                )
             ResponseEntity.ok(
                 mapOf<String, Any>(
                     "access_token" to token.accessToken,

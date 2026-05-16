@@ -1,4 +1,4 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.application
 
 import org.springframework.data.annotation.Id
 import org.springframework.data.relational.core.mapping.Column

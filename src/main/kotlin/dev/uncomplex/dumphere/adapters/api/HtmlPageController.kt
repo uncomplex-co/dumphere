@@ -1,5 +1,8 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.application.PublishedPage
+import dev.uncomplex.dumphere.application.authenticatedUser
 import org.springframework.http.CacheControl
 import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
@@ -18,21 +21,28 @@ class HtmlPageController(
     private val store: HtmlPageStore,
 ) {
     @GetMapping("/p/{id}")
-    fun show(@PathVariable id: String): ResponseEntity<String> {
+    fun show(
+        @PathVariable id: String,
+    ): ResponseEntity<String> {
         val html = store.readHtml(id) ?: return ResponseEntity.notFound().build()
 
-        return ResponseEntity.ok()
+        return ResponseEntity
+            .ok()
             .contentType(MediaType.TEXT_HTML)
             .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
-            .header("Content-Security-Policy", "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'")
-            .header("X-Content-Type-Options", "nosniff")
+            .header(
+                "Content-Security-Policy",
+                "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'",
+            ).header("X-Content-Type-Options", "nosniff")
             .header("Referrer-Policy", "no-referrer")
             .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().build().toString())
             .body(html)
     }
 
     @GetMapping("/api/pages/{id}")
-    fun metadata(@PathVariable id: String): ResponseEntity<PublishedPage> {
+    fun metadata(
+        @PathVariable id: String,
+    ): ResponseEntity<PublishedPage> {
         val page = store.readMetadata(id) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(page)
     }
@@ -43,7 +53,8 @@ class HtmlPageController(
         @RequestBody request: UpdatePageRequest,
         authentication: Authentication,
     ): ResponseEntity<PublishedPage> {
-        val page = store.update(id, request.title, request.html, authentication.authenticatedUser()) ?: return ResponseEntity.notFound().build()
+        val page =
+            store.update(id, request.title, request.html, authentication.authenticatedUser()) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(page)
     }
 }

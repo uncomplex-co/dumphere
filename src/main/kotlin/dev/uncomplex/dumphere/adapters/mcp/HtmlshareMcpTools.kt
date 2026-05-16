@@ -1,5 +1,8 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.adapters.mcp
 
+import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.application.PublishedPage
+import dev.uncomplex.dumphere.application.authenticatedUser
 import org.springframework.ai.mcp.annotation.McpTool
 import org.springframework.ai.mcp.annotation.McpToolParam
 import org.springframework.security.core.context.SecurityContextHolder
@@ -31,5 +34,8 @@ class HtmlshareMcpTools(
         html: String,
         @McpToolParam(description = "Optional replacement title", required = false)
         title: String?,
-    ): PublishedPage = requireNotNull(store.update(id, title, html, SecurityContextHolder.getContext().authentication.authenticatedUser())) { "page not found: $id" }
+    ): PublishedPage =
+        requireNotNull(store.update(id, title, html, SecurityContextHolder.getContext().authentication.authenticatedUser())) {
+            "page not found: $id"
+        }
 }

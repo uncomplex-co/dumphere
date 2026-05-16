@@ -1,5 +1,6 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.application
 
+import dev.uncomplex.dumphere.ports.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant

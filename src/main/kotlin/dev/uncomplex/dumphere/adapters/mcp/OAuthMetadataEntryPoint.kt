@@ -1,12 +1,13 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.adapters.mcp
 
+import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.security.core.AuthenticationException
 import org.springframework.security.web.AuthenticationEntryPoint
 
 class OAuthMetadataEntryPoint(
-    private val properties: HtmlshareProperties,
+    private val properties: DumpHereApplicationProperties,
 ) : AuthenticationEntryPoint {
     override fun commence(
         request: HttpServletRequest,

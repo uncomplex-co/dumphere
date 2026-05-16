@@ -1,4 +1,4 @@
-package dev.uncomplex.htmlshare.htmlshare
+package dev.uncomplex.dumphere.adapters.mcp
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -22,25 +22,44 @@ class DynamicClientRegistrationController(
     private val passwordEncoder: PasswordEncoder,
 ) {
     @PostMapping("/connect/register")
-    fun register(@RequestBody request: DynamicClientRegistrationRequest): DynamicClientRegistrationResponse {
+    fun register(
+        @RequestBody request: DynamicClientRegistrationRequest,
+    ): DynamicClientRegistrationResponse {
         val clientId = UUID.randomUUID().toString()
         val clientSecret = UUID.randomUUID().toString()
-        val scopes = request.scope?.split(' ')?.filter { it.isNotBlank() }?.toSet().orEmpty()
-            .ifEmpty { setOf(OidcScopes.OPENID, OidcScopes.EMAIL, OidcScopes.PROFILE) }
+        val scopes =
+            request.scope
+                ?.split(' ')
+                ?.filter { it.isNotBlank() }
+                ?.toSet()
+                .orEmpty()
+                .ifEmpty { setOf(OidcScopes.OPENID, OidcScopes.EMAIL, OidcScopes.PROFILE) }
 
-        val client = RegisteredClient.withId(UUID.randomUUID().toString())
-            .clientId(clientId)
-            .clientIdIssuedAt(Instant.now())
-            .clientSecret(passwordEncoder.encode(clientSecret))
-            .clientName(request.clientName ?: "opencode")
-            .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-            .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
-            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-            .redirectUris { it.addAll(request.redirectUris) }
-            .scopes { it.addAll(scopes) }
-            .clientSettings(ClientSettings.builder().requireAuthorizationConsent(false).requireProofKey(true).build())
-            .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofMinutes(5)).reuseRefreshTokens(false).build())
-            .build()
+        val client =
+            RegisteredClient
+                .withId(UUID.randomUUID().toString())
+                .clientId(clientId)
+                .clientIdIssuedAt(Instant.now())
+                .clientSecret(passwordEncoder.encode(clientSecret))
+                .clientName(request.clientName ?: "opencode")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUris { it.addAll(request.redirectUris) }
+                .scopes { it.addAll(scopes) }
+                .clientSettings(
+                    ClientSettings
+                        .builder()
+                        .requireAuthorizationConsent(false)
+                        .requireProofKey(true)
+                        .build(),
+                ).tokenSettings(
+                    TokenSettings
+                        .builder()
+                        .accessTokenTimeToLive(Duration.ofMinutes(5))
+                        .reuseRefreshTokens(false)
+                        .build(),
+                ).build()
 
         clients.save(client)
 
