@@ -4,6 +4,8 @@ plugins {
     id("org.springframework.boot") version "4.0.6"
     id("io.spring.dependency-management") version "1.1.7"
     id("org.graalvm.buildtools.native") version "0.11.5"
+    id("com.github.spotbugs") version "6.5.4"
+    id("com.diffplug.spotless") version "8.5.1"
 }
 
 group = "dev.uncomplex.htmlshare"
@@ -63,6 +65,44 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
-tasks.matching { it.name in setOf("processAot", "compileAotKotlin", "compileAotJava", "processAotResources", "processTestAot", "compileTestAotKotlin", "compileTestAotJava", "processTestAotResources") }.configureEach {
-    enabled = false
+tasks
+    .matching {
+        it.name in
+            setOf(
+                "processAot",
+                "compileAotKotlin",
+                "compileAotJava",
+                "processAotResources",
+                "processTestAot",
+                "compileTestAotKotlin",
+                "compileTestAotJava",
+                "processTestAotResources",
+            )
+    }.configureEach {
+        enabled = false
+    }
+
+spotbugs {
+    toolVersion = "4.9.8"
+    effort = com.github.spotbugs.snom.Effort.MAX
+    reportLevel = com.github.spotbugs.snom.Confidence.HIGH
+    ignoreFailures = true
+}
+
+tasks.withType<com.github.spotbugs.snom.SpotBugsTask>().configureEach {
+    reports.create("html") {
+        required = true
+        outputLocation = layout.buildDirectory.file("reports/spotbugs/$name.html")
+    }
+}
+
+spotless {
+    kotlin {
+        ktlint()
+        target("src/**/*.kt")
+    }
+    kotlinGradle {
+        ktlint()
+        target("*.gradle.kts")
+    }
 }
