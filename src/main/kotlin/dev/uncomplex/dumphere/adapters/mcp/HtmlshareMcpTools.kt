@@ -20,23 +20,25 @@ class HtmlshareMcpTools(
 ) {
     @McpTool(
         name = "publish_html",
-        description = "Publish an HTML page for team sharing and return a link",
+        description = "Publish an HTML or Markdown page for team sharing and return a link",
     )
     fun publishHtml(
-        @McpToolParam(description = "Complete HTML document or fragment to publish", required = true)
+        @McpToolParam(description = "Complete HTML or Markdown document or fragment to publish", required = true)
         html: String,
+        @McpToolParam(description = "Content format: html or markdown", required = true)
+        format: String,
         @McpToolParam(description = "Short human-readable page title", required = false)
         title: String?,
-    ): PublishedPage = publishHtmlTool.execute(html, title, currentUser())
+    ): PublishedPage = publishHtmlTool.execute(html, format, title, currentUser())
 
     @McpTool(
         name = "read_file_contents",
         description =
             """
-            Read a published HTML page. If the page does not exist, an error is returned.
+            Read a published HTML or Markdown file. If the page does not exist, an error is returned.
 
             Usage:
-            - By default, this tool returns up to 2000 lines from the start of the HTML.
+            - By default, this tool returns up to 2000 lines from the start of the file.
             - The offset parameter is the line number to start reading from (1-indexed).
             - To read later sections, call this tool again with a larger offset.
             - Contents are returned with each line prefixed by its line number as `<line>: <content>`.
@@ -54,12 +56,12 @@ class HtmlshareMcpTools(
 
     @McpTool(
         name = "update_html",
-        description = "Replace an existing published HTML page and return the same link",
+        description = "Replace an existing published HTML or Markdown page and return the same link",
     )
     fun updateHtml(
         @McpToolParam(description = "Published page id", required = true)
         id: String,
-        @McpToolParam(description = "Replacement HTML document or fragment", required = true)
+        @McpToolParam(description = "Replacement HTML or Markdown document or fragment", required = true)
         html: String,
         @McpToolParam(description = "Optional replacement title", required = false)
         title: String?,
@@ -69,12 +71,12 @@ class HtmlshareMcpTools(
         name = "edit_file_contents",
         description =
             """
-            Performs exact string replacements in a published HTML page.
+            Performs exact string replacements in a published HTML or Markdown file.
 
             Usage:
             - Read the page before editing so you can copy exact content and line context.
             - When editing text from read_file_contents output, never include the line number prefix in oldString or newString.
-            - The edit fails if oldString is not found in the current HTML.
+            - The edit fails if oldString is not found in the current file.
             - The edit fails if oldString matches multiple times and replaceAll is not true.
             - Use replaceAll for renaming or replacing every occurrence.
             """,

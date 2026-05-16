@@ -6,6 +6,7 @@ data class PublishedPage(
     val id: String,
     val title: String,
     val url: String,
+    val contentFormat: PageContentFormat = PageContentFormat.HTML,
     val createdAt: Instant,
     val createdBy: String? = null,
     val updatedAt: Instant? = null,

@@ -1,12 +1,12 @@
 package dev.uncomplex.dumphere.adapters.api
 
-import kotlin.test.Test
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.authentication.TestingAuthenticationToken
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache
+import kotlin.test.Test
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class LoginControllerTests {
     private val requestCache = HttpSessionRequestCache()

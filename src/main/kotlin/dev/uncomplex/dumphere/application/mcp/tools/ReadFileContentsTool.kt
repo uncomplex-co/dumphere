@@ -17,15 +17,16 @@ class ReadFileContentsTool(
         require(actualOffset >= 1) { "offset must be at least 1" }
         require(actualLimit >= 1) { "limit must be at least 1" }
 
-        val html = requireNotNull(store.readHtml(id)) { "page not found: $id" }
-        val slice = sliceLines(html, actualLimit, actualOffset)
+        val page = requireNotNull(store.readMetadata(id)) { "page not found: $id" }
+        val contents = requireNotNull(store.readContents(id)) { "page not found: $id" }
+        val slice = sliceLines(contents, actualLimit, actualOffset)
         if (slice.count < actualOffset && !(slice.count == 0 && actualOffset == 1)) {
             error("Offset $actualOffset is out of range for this file (${slice.count} lines)")
         }
 
         return buildString {
             append("<path>$id</path>\n")
-            append("<type>html</type>\n")
+            append("<type>${page.contentFormat.toolType()}</type>\n")
             append("<content>\n")
             append(slice.lines.mapIndexed { index, line -> "${index + actualOffset}: $line" }.joinToString("\n"))
 

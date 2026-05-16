@@ -30,13 +30,14 @@ class HtmlPageStore(
     @Transactional
     fun publish(
         title: String?,
-        html: String,
+        contents: String,
+        contentFormat: PageContentFormat,
         createdBy: AuthenticatedUser?,
     ): PublishedPage {
-        val bytes = html.toByteArray(StandardCharsets.UTF_8)
-        require(bytes.isNotEmpty()) { "html must not be empty" }
+        val bytes = contents.toByteArray(StandardCharsets.UTF_8)
+        require(bytes.isNotEmpty()) { "contents must not be empty" }
         require(bytes.size <= properties.maxHtmlBytes) {
-            "html is ${bytes.size} bytes, max is ${properties.maxHtmlBytes}"
+            "contents are ${bytes.size} bytes, max is ${properties.maxHtmlBytes}"
         }
 
         val id = newId()
@@ -47,6 +48,7 @@ class HtmlPageStore(
                 id = id,
                 title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: "Untitled HTML page",
                 url = "${properties.publicBaseUrl.trimEnd('/')}/p/$id",
+                contentFormat = contentFormat,
                 createdAt = now,
                 createdBy = user?.email ?: user?.subject,
                 version = 1,
@@ -54,33 +56,35 @@ class HtmlPageStore(
             )
 
         jdbcAggregateTemplate.insert(page.toEntity(createdByUserId = user?.id))
-        versions.save(page.toVersionEntity(html, user?.id))
+        versions.save(page.toVersionEntity(contents, user?.id))
 
         return page
     }
 
-    fun readHtml(id: String): String? {
+    fun readContents(id: String): String? {
         if (!id.matches(ID_PATTERN)) return null
 
         val page = pages.findById(id).orElse(null) ?: return readLegacyHtml(id)
         return versions.findByPageIdAndVersion(id, page.currentVersion)?.html ?: readLegacyHtml(id)
     }
 
+    fun readHtml(id: String): String? = readContents(id)
+
     @Transactional
     fun update(
         id: String,
         title: String?,
-        html: String,
+        contents: String,
         updatedBy: AuthenticatedUser?,
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
         val existingEntity = pages.findById(id).orElse(null)
         val existing = existingEntity?.toPublishedPage() ?: readLegacyMetadata(id) ?: return null
-        val bytes = html.toByteArray(StandardCharsets.UTF_8)
-        require(bytes.isNotEmpty()) { "html must not be empty" }
+        val bytes = contents.toByteArray(StandardCharsets.UTF_8)
+        require(bytes.isNotEmpty()) { "contents must not be empty" }
         require(bytes.size <= properties.maxHtmlBytes) {
-            "html is ${bytes.size} bytes, max is ${properties.maxHtmlBytes}"
+            "contents are ${bytes.size} bytes, max is ${properties.maxHtmlBytes}"
         }
 
         val now = Instant.now()
@@ -94,7 +98,7 @@ class HtmlPageStore(
                 bytes = bytes.size.toLong(),
             )
 
-        versions.save(page.toVersionEntity(html, user?.id))
+        versions.save(page.toVersionEntity(contents, user?.id))
         pages.save(page.toEntity(createdByUserId = existingEntity?.createdByUserId, updatedByUserId = user?.id))
 
         return page
@@ -110,18 +114,18 @@ class HtmlPageStore(
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
-        val currentHtml = readHtml(id) ?: return null
-        val nextHtml =
+        val currentContents = readContents(id) ?: return null
+        val nextContents =
             if (oldString.isEmpty()) {
                 require(oldString != newString) {
                     "No changes to apply: oldString and newString are identical."
                 }
                 newString
             } else {
-                HtmlDocumentEditor.applyWithOriginalLineEndings(currentHtml, oldString, newString, replaceAll)
+                HtmlDocumentEditor.applyWithOriginalLineEndings(currentContents, oldString, newString, replaceAll)
             }
 
-        return update(id, null, nextHtml, updatedBy)
+        return update(id, null, nextContents, updatedBy)
     }
 
     fun readMetadata(id: String): PublishedPage? {
@@ -137,6 +141,7 @@ class HtmlPageStore(
         id = id,
         title = title,
         url = url,
+        contentFormat = contentFormat,
         createdAt = createdAt,
         createdBy = createdBy,
         createdByUserId = createdByUserId,
@@ -148,12 +153,12 @@ class HtmlPageStore(
     )
 
     private fun PublishedPage.toVersionEntity(
-        html: String,
+        contents: String,
         createdByUserId: Long?,
     ) = HtmlPageVersionEntity(
         pageId = id,
         version = version,
-        html = html,
+        html = contents,
         bytes = bytes,
         createdAt = updatedAt ?: createdAt,
         createdBy = updatedBy ?: createdBy,
@@ -165,6 +170,7 @@ class HtmlPageStore(
             id = id,
             title = title,
             url = url,
+            contentFormat = contentFormat,
             createdAt = createdAt,
             createdBy = createdBy,
             updatedAt = updatedAt,

@@ -1,6 +1,7 @@
 package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.application.PageContentRenderer
 import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.authenticatedUser
 import org.springframework.http.CacheControl
@@ -19,12 +20,14 @@ import java.util.concurrent.TimeUnit
 @RestController
 class HtmlPageController(
     private val store: HtmlPageStore,
+    private val renderer: PageContentRenderer,
 ) {
     @GetMapping("/p/{id}")
     fun show(
         @PathVariable id: String,
     ): ResponseEntity<String> {
-        val html = store.readHtml(id) ?: return ResponseEntity.notFound().build()
+        val page = store.readMetadata(id) ?: return ResponseEntity.notFound().build()
+        val contents = store.readContents(id) ?: return ResponseEntity.notFound().build()
 
         return ResponseEntity
             .ok()
@@ -36,7 +39,7 @@ class HtmlPageController(
             ).header("X-Content-Type-Options", "nosniff")
             .header("Referrer-Policy", "no-referrer")
             .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().build().toString())
-            .body(html)
+            .body(renderer.render(contents, page.contentFormat, page.title))
     }
 
     @GetMapping("/api/pages/{id}")
