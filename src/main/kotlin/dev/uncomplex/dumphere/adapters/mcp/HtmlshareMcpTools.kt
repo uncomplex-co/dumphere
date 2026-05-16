@@ -24,12 +24,12 @@ class HtmlshareMcpTools(
     )
     fun publishHtml(
         @McpToolParam(description = "Complete HTML or Markdown document or fragment to publish", required = true)
-        html: String,
+        contents: String,
         @McpToolParam(description = "Content format: html or markdown", required = true)
         format: String,
         @McpToolParam(description = "Short human-readable file name", required = false)
         file_name: String?,
-    ): PublishedPage = publishHtmlTool.execute(html, format, file_name, currentUser())
+    ): PublishedPage = publishHtmlTool.execute(contents, format, file_name, currentUser())
 
     @McpTool(
         name = "read_file_contents",
@@ -62,8 +62,8 @@ class HtmlshareMcpTools(
         @McpToolParam(description = "Published page id", required = true)
         id: String,
         @McpToolParam(description = "Replacement HTML or Markdown document or fragment", required = true)
-        html: String,
-    ): PublishedPage = updateHtmlTool.execute(id, html, currentUser())
+        contents: String,
+    ): PublishedPage = updateHtmlTool.execute(id, contents, currentUser())
 
     @McpTool(
         name = "edit_file_contents",

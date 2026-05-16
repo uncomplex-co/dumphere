@@ -11,9 +11,9 @@ class PublishHtmlTool(
     private val store: HtmlPageStore,
 ) {
     fun execute(
-        html: String,
+        contents: String,
         format: String,
         title: String?,
         user: AuthenticatedUser?,
-    ): PublishedPage = store.publish(title, html, PageContentFormat.fromToolType(format), user)
+    ): PublishedPage = store.publish(title, contents, PageContentFormat.fromToolType(format), user)
 }
