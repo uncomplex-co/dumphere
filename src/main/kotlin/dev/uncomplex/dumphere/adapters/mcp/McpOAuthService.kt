@@ -41,11 +41,19 @@ data class McpAuthorizationRequest(
 data class McpTokenResult(
     val accessToken: String,
     val expiresIn: Long,
+    val refreshToken: String,
 )
 
 private data class AuthorizationCodeGrant(
     val request: McpAuthorizationRequest,
     val user: AuthenticatedUser,
+    val expiresAt: Instant,
+)
+
+private data class RefreshTokenGrant(
+    val user: AuthenticatedUser,
+    val clientId: String,
+    val scopes: Set<String>,
     val expiresAt: Instant,
 )
 
@@ -69,9 +77,11 @@ class McpOAuthService(
     private val properties: DumpHereApplicationProperties,
 ) {
     private val grants = ConcurrentHashMap<String, AuthorizationCodeGrant>()
+    private val refreshTokens = ConcurrentHashMap<String, RefreshTokenGrant>()
     private val secureRandom = SecureRandom()
     private val codeLifetime = Duration.ofMinutes(2)
     private val tokenLifetime = Duration.ofMinutes(5)
+    private val refreshTokenLifetime = Duration.ofHours(24)
 
     fun validateAuthorizationRequest(
         responseType: String?,
@@ -188,7 +198,65 @@ class McpOAuthService(
                 ),
             )
 
-        return McpTokenResult(token.tokenValue, tokenLifetime.seconds)
+        val refreshToken = randomToken(32)
+        refreshTokens[refreshToken] =
+            RefreshTokenGrant(
+                user = stored.user,
+                clientId = client.clientId,
+                scopes = stored.request.requestedScopes,
+                expiresAt = now.plus(refreshTokenLifetime),
+            )
+
+        return McpTokenResult(token.tokenValue, tokenLifetime.seconds, refreshToken)
+    }
+
+    fun exchangeRefreshToken(
+        refreshToken: String?,
+        authorizationHeader: String?,
+        clientIdParam: String?,
+        clientSecretParam: String?,
+    ): McpTokenResult {
+        pruneExpiredGrants()
+        val tokenValue = refreshToken?.takeIf { it.isNotBlank() } ?: throw OAuthTokenException("invalid_request", "Missing refresh_token")
+        val stored = refreshTokens.remove(tokenValue) ?: throw OAuthTokenException("invalid_grant", "Refresh token is invalid or expired")
+        if (stored.expiresAt.isBefore(Instant.now())) {
+            throw OAuthTokenException("invalid_grant", "Refresh token has expired")
+        }
+
+        val client = authenticateClient(authorizationHeader, clientIdParam, clientSecretParam)
+        if (client.clientId != stored.clientId) {
+            throw OAuthTokenException("invalid_grant", "Refresh token was not issued to this client")
+        }
+
+        val now = Instant.now()
+        val token =
+            jwtEncoder.encode(
+                JwtEncoderParameters.from(
+                    JwsHeader.with(SignatureAlgorithm.RS256).build(),
+                    JwtClaimsSet
+                        .builder()
+                        .issuer(properties.publicBaseUrl.trimEnd('/'))
+                        .subject(stored.user.subject)
+                        .audience(listOf("${properties.publicBaseUrl.trimEnd('/')}/mcp"))
+                        .issuedAt(now)
+                        .expiresAt(now.plus(tokenLifetime))
+                        .claim("client_id", client.clientId)
+                        .claim("email", stored.user.email)
+                        .claim("name", stored.user.displayName)
+                        .build(),
+                ),
+            )
+
+        val newRefreshToken = randomToken(32)
+        refreshTokens[newRefreshToken] =
+            RefreshTokenGrant(
+                user = stored.user,
+                clientId = client.clientId,
+                scopes = stored.scopes,
+                expiresAt = now.plus(refreshTokenLifetime),
+            )
+
+        return McpTokenResult(token.tokenValue, tokenLifetime.seconds, newRefreshToken)
     }
 
     fun authorizationSuccessRedirect(
@@ -275,6 +343,7 @@ class McpOAuthService(
     private fun pruneExpiredGrants() {
         val now = Instant.now()
         grants.entries.removeIf { it.value.expiresAt.isBefore(now) }
+        refreshTokens.entries.removeIf { it.value.expiresAt.isBefore(now) }
     }
 
     private fun randomToken(size: Int): String {

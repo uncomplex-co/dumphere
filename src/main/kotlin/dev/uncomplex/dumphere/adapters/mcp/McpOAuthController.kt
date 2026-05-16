@@ -65,34 +65,50 @@ class McpOAuthController(
         @RequestParam("code", required = false) code: String?,
         @RequestParam("redirect_uri", required = false) redirectUri: String?,
         @RequestParam("code_verifier", required = false) codeVerifier: String?,
+        @RequestParam("refresh_token", required = false) refreshToken: String?,
         @RequestParam("client_id", required = false) clientId: String?,
         @RequestParam("client_secret", required = false) clientSecret: String?,
         @RequestHeader("Authorization", required = false) authorizationHeader: String?,
     ): ResponseEntity<Map<String, Any>> {
-        if (grantType != "authorization_code") {
-            return ResponseEntity.badRequest().body(mapOf<String, Any>("error" to "unsupported_grant_type"))
-        }
+        val token =
+            try {
+                when (grantType) {
+                    "authorization_code" -> {
+                        mcpOAuthService.exchangeAuthorizationCode(
+                            code = code,
+                            redirectUri = redirectUri,
+                            codeVerifier = codeVerifier,
+                            authorizationHeader = authorizationHeader,
+                            clientIdParam = clientId,
+                            clientSecretParam = clientSecret,
+                        )
+                    }
 
-        return try {
-            val token =
-                mcpOAuthService.exchangeAuthorizationCode(
-                    code = code,
-                    redirectUri = redirectUri,
-                    codeVerifier = codeVerifier,
-                    authorizationHeader = authorizationHeader,
-                    clientIdParam = clientId,
-                    clientSecretParam = clientSecret,
-                )
-            ResponseEntity.ok(
-                mapOf<String, Any>(
-                    "access_token" to token.accessToken,
-                    "token_type" to "Bearer",
-                    "expires_in" to token.expiresIn,
-                ),
-            )
-        } catch (error: OAuthTokenException) {
-            val response = mcpOAuthService.tokenErrorResponse(error)
-            ResponseEntity.status(response.statusCode).headers(response.headers).body(response.body ?: emptyMap())
-        }
+                    "refresh_token" -> {
+                        mcpOAuthService.exchangeRefreshToken(
+                            refreshToken = refreshToken,
+                            authorizationHeader = authorizationHeader,
+                            clientIdParam = clientId,
+                            clientSecretParam = clientSecret,
+                        )
+                    }
+
+                    else -> {
+                        return ResponseEntity.badRequest().body(mapOf<String, Any>("error" to "unsupported_grant_type"))
+                    }
+                }
+            } catch (error: OAuthTokenException) {
+                val response = mcpOAuthService.tokenErrorResponse(error)
+                return ResponseEntity.status(response.statusCode).headers(response.headers).body(response.body ?: emptyMap())
+            }
+
+        return ResponseEntity.ok(
+            mapOf<String, Any>(
+                "access_token" to token.accessToken,
+                "token_type" to "Bearer",
+                "expires_in" to token.expiresIn,
+                "refresh_token" to token.refreshToken,
+            ),
+        )
     }
 }

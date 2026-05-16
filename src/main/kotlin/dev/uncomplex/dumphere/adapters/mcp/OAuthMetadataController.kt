@@ -33,7 +33,7 @@ class OAuthMetadataController(
             "token_endpoint" to "$baseUrl/oauth2/token",
             "jwks_uri" to "$baseUrl/oauth2/jwks",
             "registration_endpoint" to "$baseUrl/connect/register",
-            "grant_types_supported" to listOf("authorization_code"),
+            "grant_types_supported" to listOf("authorization_code", "refresh_token"),
             "response_types_supported" to listOf("code"),
             "token_endpoint_auth_methods_supported" to listOf("client_secret_basic", "client_secret_post"),
             "code_challenge_methods_supported" to listOf("S256"),

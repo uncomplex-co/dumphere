@@ -45,6 +45,7 @@ class DynamicClientRegistrationController(
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                 .redirectUris { it.addAll(request.redirectUris) }
                 .scopes { it.addAll(scopes) }
                 .clientSettings(
@@ -68,7 +69,7 @@ class DynamicClientRegistrationController(
             clientSecret = clientSecret,
             clientName = client.clientName,
             redirectUris = request.redirectUris,
-            grantTypes = listOf("authorization_code"),
+            grantTypes = listOf("authorization_code", "refresh_token"),
             tokenEndpointAuthMethod = "client_secret_basic",
             scope = scopes.joinToString(" "),
         )
