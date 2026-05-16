@@ -1,6 +1,7 @@
 package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.adapters.mcp.OAuthMetadataEntryPoint
+import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
 import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.authenticatedUser
@@ -15,13 +16,12 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.authority.FactorGrantedAuthority
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver
-import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal
-import org.springframework.security.oauth2.core.oidc.user.OidcUser
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
@@ -35,6 +35,7 @@ import kotlin.collections.plus
 class SecurityConfig(
     private val properties: DumpHereApplicationProperties,
     private val clientRegistrationRepository: ClientRegistrationRepository,
+    private val allowedEmailDomainPolicy: AllowedEmailDomainPolicy,
     private val userProvisioning: UserProvisioningService,
 ) {
     @Bean
@@ -61,9 +62,7 @@ class SecurityConfig(
                         val auth = authentication.get()
                         AuthorizationDecision(
                             auth.isAuthenticated && auth !is AnonymousAuthenticationToken &&
-                                emailAllowed(
-                                    auth,
-                                ),
+                                allowedEmailDomainPolicy.isAllowed(auth),
                         )
                     }
             }.oauth2Login { oauth ->
@@ -110,7 +109,10 @@ class SecurityConfig(
         val requestCache = requestCache()
 
         return AuthenticationSuccessHandler { request, response, authentication ->
-            if (!emailAllowed(authentication)) {
+            if (!allowedEmailDomainPolicy.isAllowed(authentication)) {
+                requestCache.removeRequest(request, response)
+                request.getSession(false)?.invalidate()
+                SecurityContextHolder.clearContext()
                 response.sendError(HttpStatus.FORBIDDEN.value(), "email domain not allowed")
                 return@AuthenticationSuccessHandler
             }
@@ -158,18 +160,4 @@ class SecurityConfig(
 
     @Bean
     fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
-
-    private fun emailAllowed(authentication: Authentication): Boolean {
-        val domain = properties.allowedEmailDomain?.trim().orEmpty()
-        if (domain.isEmpty()) return true
-
-        val email =
-            when (val principal = authentication.principal) {
-                is OidcUser -> principal.email
-                is OAuth2AuthenticatedPrincipal -> principal.getAttribute("email")
-                else -> null
-            } ?: return false
-
-        return email.endsWith("@$domain", ignoreCase = true)
-    }
 }

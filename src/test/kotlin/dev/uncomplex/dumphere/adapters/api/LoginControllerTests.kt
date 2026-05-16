@@ -1,8 +1,11 @@
 package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
+import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.authentication.TestingAuthenticationToken
+import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache
 import kotlin.test.Test
 import kotlin.test.assertNotNull
@@ -10,7 +13,7 @@ import kotlin.test.assertTrue
 
 class LoginControllerTests {
     private val requestCache = HttpSessionRequestCache()
-    private val controller = LoginController(requestCache)
+    private val controller = LoginController(allowedEmailDomainPolicy = policy(), requestCache = requestCache)
 
     @Test
     fun redirectsAuthenticatedUserToSavedRequestWithQueryStringIntact() {
@@ -43,8 +46,37 @@ class LoginControllerTests {
         assertTrue(redirectedUrl.contains("state=abc"))
     }
 
-    private fun authenticatedUser() =
-        TestingAuthenticationToken("user", "credentials").apply {
+    @Test
+    fun doesNotRedirectAuthenticatedUserWhenEmailDomainIsNotAllowed() {
+        val loginRequest = MockHttpServletRequest("GET", "/login")
+        val loginResponse = MockHttpServletResponse()
+
+        val result = controller.login(loginRequest, loginResponse, authenticatedUser(email = "user@blocked.test"))
+
+        assertTrue(loginResponse.redirectedUrl == null)
+        assertNotNull(result)
+    }
+
+    private fun authenticatedUser(email: String = "user@example.com") =
+        TestingAuthenticationToken(jwt(email), "credentials").apply {
             isAuthenticated = true
         }
+
+    private fun jwt(email: String) =
+        Jwt
+            .withTokenValue("token")
+            .header("alg", "none")
+            .claim("sub", "user")
+            .claim("email", email)
+            .build()
+
+    private fun policy(domain: String = "example.com") =
+        AllowedEmailDomainPolicy(
+            DumpHereApplicationProperties(
+                storageDir = "/tmp/htmlshare-test",
+                publicBaseUrl = "http://localhost:7331",
+                maxHtmlBytes = 1024,
+                allowedEmailDomain = domain,
+            ),
+        )
 }

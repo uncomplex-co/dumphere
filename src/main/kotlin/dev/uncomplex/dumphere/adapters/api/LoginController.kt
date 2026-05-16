@@ -1,17 +1,20 @@
 package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
 import dev.uncomplex.dumphere.application.authenticatedUser
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.MediaType
 import org.springframework.security.authentication.AnonymousAuthenticationToken
 import org.springframework.security.core.Authentication
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
 class LoginController(
+    private val allowedEmailDomainPolicy: AllowedEmailDomainPolicy,
     private val requestCache: HttpSessionRequestCache,
 ) {
     @GetMapping("/login", produces = [MediaType.TEXT_HTML_VALUE])
@@ -20,8 +23,14 @@ class LoginController(
         response: HttpServletResponse,
         authentication: Authentication?,
     ): String? {
+        if (authentication != null && authentication.isAuthenticated && !allowedEmailDomainPolicy.isAllowed(authentication)) {
+            requestCache.removeRequest(request, response)
+            request.getSession(false)?.invalidate()
+            SecurityContextHolder.clearContext()
+        }
+
         if (authentication != null && authentication.isAuthenticated && authentication !is AnonymousAuthenticationToken &&
-            authentication.authenticatedUser() != null
+            authentication.authenticatedUser() != null && allowedEmailDomainPolicy.isAllowed(authentication)
         ) {
             val savedRequest = requestCache.getRequest(request, response)
             requestCache.removeRequest(request, response)
