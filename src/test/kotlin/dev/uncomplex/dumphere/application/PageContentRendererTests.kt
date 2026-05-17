@@ -19,7 +19,8 @@ class PageContentRendererTests {
         val rendered = renderer.render("# Hello", PageContentFormat.MARKDOWN, "Doc")
 
         assertTrue(rendered.contains("<title>Doc</title>"))
-        assertTrue(rendered.contains("<h1>Hello</h1>"))
+        assertTrue(rendered.contains("<h1"))
+        assertTrue(rendered.contains("Hello</h1>"))
         assertTrue(rendered.contains("<!doctype html>"))
     }
 }

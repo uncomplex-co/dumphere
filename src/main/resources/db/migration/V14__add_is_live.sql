@@ -1,0 +1,1 @@
+ALTER TABLE html_pages ADD COLUMN is_live BOOLEAN NOT NULL DEFAULT false;

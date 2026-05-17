@@ -88,6 +88,8 @@ class SecurityConfig(
                             .tlsClientCertificateBoundAccessTokens(false)
                     }
                 }
+            }.headers { headers ->
+                headers.frameOptions { it.sameOrigin() }
             }.exceptionHandling { exceptions ->
                 exceptions.defaultAuthenticationEntryPointFor(
                     OAuthMetadataEntryPoint(properties),

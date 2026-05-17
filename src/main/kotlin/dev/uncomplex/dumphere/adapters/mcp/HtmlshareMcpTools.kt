@@ -5,6 +5,7 @@ import dev.uncomplex.dumphere.application.authenticatedUser
 import dev.uncomplex.dumphere.application.mcp.tools.EditFileContentsTool
 import dev.uncomplex.dumphere.application.mcp.tools.PublishHtmlTool
 import dev.uncomplex.dumphere.application.mcp.tools.ReadFileContentsTool
+import dev.uncomplex.dumphere.application.mcp.tools.SetPageLiveTool
 import dev.uncomplex.dumphere.application.mcp.tools.UpdateHtmlTool
 import org.springframework.ai.mcp.annotation.McpTool
 import org.springframework.ai.mcp.annotation.McpToolParam
@@ -17,6 +18,7 @@ class HtmlshareMcpTools(
     private val readFileContentsTool: ReadFileContentsTool,
     private val updateHtmlTool: UpdateHtmlTool,
     private val editFileContentsTool: EditFileContentsTool,
+    private val setPageLiveTool: SetPageLiveTool,
 ) {
     @McpTool(
         name = "publish_html",
@@ -89,6 +91,17 @@ class HtmlshareMcpTools(
         @McpToolParam(description = "Replace all occurrences of oldString (default false)", required = false)
         replaceAll: Boolean?,
     ): String = editFileContentsTool.execute(id, oldString, newString, replaceAll ?: false, currentUser())
+
+    @McpTool(
+        name = "enable_live_reload",
+        description = "Enable or disable live-reload for a published page. When enabled, the page automatically refreshes after each edit.",
+    )
+    fun enableLiveReload(
+        @McpToolParam(description = "Published page id", required = true)
+        id: String,
+        @McpToolParam(description = "Enable live reload", required = true)
+        live: Boolean,
+    ): PublishedPage = setPageLiveTool.execute(id, live, currentUser())
 
     private fun currentUser() = SecurityContextHolder.getContext().authentication.authenticatedUser()
 }

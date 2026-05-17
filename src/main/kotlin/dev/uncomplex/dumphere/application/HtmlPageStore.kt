@@ -130,6 +130,25 @@ class HtmlPageStore(
         return pages.findById(id).map { it.toPublishedPage() }.orElseGet { readLegacyMetadata(id) }
     }
 
+    @Transactional
+    fun setLive(
+        id: String,
+        isLive: Boolean,
+        updatedBy: AuthenticatedUser?,
+    ): PublishedPage? {
+        if (!id.matches(ID_PATTERN)) return null
+
+        val existingEntity = pages.findById(id).orElse(null) ?: return null
+        val user = updatedBy?.let { userProvisioning.provision(it) }
+        val updatedEntity = existingEntity.copy(
+            isLive = isLive,
+            updatedAt = Instant.now(),
+            updatedByUserId = user?.id,
+        )
+        pages.save(updatedEntity)
+        return updatedEntity.toPublishedPage()
+    }
+
     private fun PublishedPage.toEntity(
         createdByUserId: Long? = null,
         updatedByUserId: Long? = null,
@@ -144,6 +163,7 @@ class HtmlPageStore(
         updatedByUserId = updatedByUserId,
         currentVersion = version,
         currentBytes = bytes,
+        isLive = isLive,
     )
 
     private fun PublishedPage.toVersionEntity(
@@ -169,6 +189,7 @@ class HtmlPageStore(
             updatedAt = updatedAt,
             version = currentVersion,
             bytes = currentBytes,
+            isLive = isLive,
         )
 
     private fun readLegacyHtml(id: String): String? {

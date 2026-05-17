@@ -27,6 +27,7 @@ data class HtmlPageEntity(
     val updatedByUserId: Long? = null,
     val currentVersion: Int,
     val currentBytes: Long,
+    val isLive: Boolean = false,
 )
 
 @Table("html_page_versions")

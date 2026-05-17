@@ -13,4 +13,5 @@ data class PublishedPage(
     val updatedBy: String? = null,
     val version: Int = 1,
     val bytes: Long,
+    val isLive: Boolean = false,
 )
