@@ -1,5 +1,6 @@
 package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PageContentRenderer
 import dev.uncomplex.dumphere.application.PublishedPage
@@ -21,6 +22,7 @@ import java.util.concurrent.TimeUnit
 class HtmlPageController(
     private val store: HtmlPageStore,
     private val renderer: PageContentRenderer,
+    private val properties: DumpHereApplicationProperties,
 ) {
     @GetMapping("/p/{id}")
     fun show(
@@ -35,7 +37,7 @@ class HtmlPageController(
             .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
             .header(
                 "Content-Security-Policy",
-                "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'",
+                "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src ${properties.cspScriptSrc}; connect-src 'none'; base-uri 'none'; form-action 'none'",
             ).header("X-Content-Type-Options", "nosniff")
             .header("Referrer-Policy", "no-referrer")
             .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().build().toString())

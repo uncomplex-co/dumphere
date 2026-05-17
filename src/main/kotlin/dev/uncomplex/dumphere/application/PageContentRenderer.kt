@@ -1,5 +1,12 @@
 package dev.uncomplex.dumphere.application
 
+import org.commonmark.ext.autolink.AutolinkExtension
+import org.commonmark.ext.footnotes.FootnotesExtension
+import org.commonmark.ext.front.matter.YamlFrontMatterExtension
+import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
+import org.commonmark.ext.gfm.tables.TablesExtension
+import org.commonmark.ext.heading.anchor.HeadingAnchorExtension
+import org.commonmark.ext.task.list.items.TaskListItemsExtension
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
 import org.springframework.stereotype.Service
@@ -7,10 +14,21 @@ import org.springframework.web.util.HtmlUtils
 
 @Service
 class PageContentRenderer {
-    private val markdownParser = Parser.builder().build()
+    private val extensions = listOf(
+        TablesExtension.create(),
+        StrikethroughExtension.create(),
+        TaskListItemsExtension.create(),
+        YamlFrontMatterExtension.create(),
+        HeadingAnchorExtension.create(),
+        FootnotesExtension.create(),
+        AutolinkExtension.create(),
+    )
+
+    private val markdownParser = Parser.builder().extensions(extensions).build()
     private val markdownRenderer =
         HtmlRenderer
             .builder()
+            .extensions(extensions)
             .escapeHtml(true)
             .sanitizeUrls(true)
             .build()
@@ -92,6 +110,50 @@ class PageContentRenderer {
                   padding-left: 16px;
                   border-left: 4px solid var(--border);
                   color: var(--muted);
+                }
+                input[type="checkbox"] {
+                  margin-right: 8px;
+                  vertical-align: middle;
+                }
+                li.task-list-item {
+                  list-style: none;
+                }
+                .footnote {
+                  font-size: 0.85em;
+                  color: var(--muted);
+                }
+                .footnote-ref {
+                  text-decoration: none;
+                  font-size: 0.85em;
+                  vertical-align: super;
+                }
+                .footnotes {
+                  margin-top: 40px;
+                  padding-top: 16px;
+                  border-top: 1px solid var(--border);
+                }
+                .footnotes ol {
+                  padding-left: 20px;
+                }
+                .footnotes li {
+                  font-size: 0.9em;
+                  color: var(--muted);
+                }
+                h1, h2, h3, h4, h5, h6 {
+                  position: relative;
+                }
+                h1:hover .anchor, h2:hover .anchor, h3:hover .anchor, h4:hover .anchor, h5:hover .anchor, h6:hover .anchor {
+                  opacity: 1;
+                }
+                .anchor {
+                  position: absolute;
+                  left: -24px;
+                  top: 0;
+                  opacity: 0;
+                  text-decoration: none;
+                  color: var(--muted);
+                  font-size: 0.8em;
+                  transition: opacity 0.1s;
                 }
               </style>
             </head>
