@@ -9,4 +9,6 @@ data class DumpHereApplicationProperties(
     val maxHtmlBytes: Long,
     val allowedEmailDomain: String? = null,
     val cspScriptSrc: String = "'unsafe-inline'",
+    val apiUsername: String,
+    val apiPassword: String,
 )

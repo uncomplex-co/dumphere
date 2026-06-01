@@ -47,6 +47,8 @@ class AllowedEmailDomainPolicyTests {
                 publicBaseUrl = "http://localhost:7331",
                 maxHtmlBytes = 1024,
                 allowedEmailDomain = domain,
+                apiUsername = "htmlshare",
+                apiPassword = "htmlshare",
             ),
         )
 

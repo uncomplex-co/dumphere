@@ -8,23 +8,24 @@ import org.springframework.http.MediaType
 import org.springframework.security.authentication.AnonymousAuthenticationToken
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
-import org.springframework.security.web.savedrequest.HttpSessionRequestCache
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
 class LoginController(
     private val allowedEmailDomainPolicy: AllowedEmailDomainPolicy,
-    private val requestCache: HttpSessionRequestCache,
 ) {
     @GetMapping("/login", produces = [MediaType.TEXT_HTML_VALUE])
     fun login(
         request: HttpServletRequest,
         response: HttpServletResponse,
         authentication: Authentication?,
+        @RequestParam("redirectUrl", required = false) redirectUrl: String?,
     ): String? {
+        val sanitizedRedirectUrl = RedirectUrlSupport.sanitize(redirectUrl)
+
         if (authentication != null && authentication.isAuthenticated && !allowedEmailDomainPolicy.isAllowed(authentication)) {
-            requestCache.removeRequest(request, response)
             request.getSession(false)?.invalidate()
             SecurityContextHolder.clearContext()
         }
@@ -32,11 +33,11 @@ class LoginController(
         if (authentication != null && authentication.isAuthenticated && authentication !is AnonymousAuthenticationToken &&
             authentication.authenticatedUser() != null && allowedEmailDomainPolicy.isAllowed(authentication)
         ) {
-            val savedRequest = requestCache.getRequest(request, response)
-            requestCache.removeRequest(request, response)
-            response.sendRedirect(savedRequest?.redirectUrl ?: "/login/success")
+            response.sendRedirect(sanitizedRedirectUrl ?: "/login/success")
             return null
         }
+
+        val googleLoginUrl = RedirectUrlSupport.googleAuthorizationUrl(sanitizedRedirectUrl).escapeHtml()
 
         return """
             <!doctype html>
@@ -57,7 +58,7 @@ class LoginController(
               <main>
                 <h1>Sign in to htmlshare</h1>
                 <p>Authenticate before viewing shared pages or publishing HTML.</p>
-                <a href="/oauth2/authorization/google">Continue with Google</a>
+                <a href="$googleLoginUrl">Continue with Google</a>
               </main>
             </body>
             </html>
@@ -66,4 +67,20 @@ class LoginController(
 
     @GetMapping("/login/success", produces = [MediaType.TEXT_PLAIN_VALUE])
     fun success(): String = "Logged in. You can close this tab."
+
+    private fun String.escapeHtml(): String =
+        buildString(length) {
+            for (char in this@escapeHtml) {
+                append(
+                    when (char) {
+                        '&' -> "&amp;"
+                        '<' -> "&lt;"
+                        '>' -> "&gt;"
+                        '"' -> "&quot;"
+                        '\'' -> "&#39;"
+                        else -> char
+                    },
+                )
+            }
+        }
 }
