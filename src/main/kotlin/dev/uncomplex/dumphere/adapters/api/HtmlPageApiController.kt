@@ -36,7 +36,7 @@ class HtmlPageApiController(
         @RequestBody request: PublishFileRequest,
         authentication: Authentication,
     ): PublishFileResponse {
-        val contentFormat = request.mimeType.toPageContentFormat()
+        val contentFormat = request.toPageContentFormat()
         val page = store.publish(request.title, request.content, contentFormat, authentication.authenticatedUser())
 
         return PublishFileResponse(page.url, page.version)
@@ -55,8 +55,9 @@ class HtmlPageApiController(
         @RequestBody request: SetLiveRequest,
         authentication: Authentication,
     ): PublishedPage {
-        val page = store.setLive(id, request.live, authentication.authenticatedUser())
-            ?: throw notFound()
+        val page =
+            store.setLive(id, request.live, authentication.authenticatedUser())
+                ?: throw notFound()
         return page
     }
 }
@@ -80,11 +81,19 @@ data class SetLiveRequest(
     val live: Boolean,
 )
 
-private fun String.toPageContentFormat(): PageContentFormat =
-    when (trim().lowercase().substringBefore(';')) {
+private fun PublishFileRequest.toPageContentFormat(): PageContentFormat =
+    when (mimeType.trim().lowercase().substringBefore(';')) {
         "text/html", "application/xhtml+xml" -> PageContentFormat.HTML
         "text/markdown", "text/x-markdown" -> PageContentFormat.MARKDOWN
+        "text/plain" -> title.toPageContentFormatByExtension()
         else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported mimeType")
+    }
+
+private fun String.toPageContentFormatByExtension(): PageContentFormat =
+    when (trim().lowercase().substringAfterLast('.', missingDelimiterValue = "")) {
+        "html", "htm" -> PageContentFormat.HTML
+        "md" -> PageContentFormat.MARKDOWN
+        else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported file extension")
     }
 
 private fun notFound() = ResponseStatusException(HttpStatus.NOT_FOUND)
