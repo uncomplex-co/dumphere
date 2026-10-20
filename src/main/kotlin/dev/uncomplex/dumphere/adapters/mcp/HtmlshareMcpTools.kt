@@ -1,5 +1,7 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
+import dev.uncomplex.dumphere.application.ArtifactVisibility
+import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.authenticatedUser
 import dev.uncomplex.dumphere.application.mcp.tools.EditFileContentsTool
@@ -19,7 +21,29 @@ class HtmlshareMcpTools(
     private val updateHtmlTool: UpdateHtmlTool,
     private val editFileContentsTool: EditFileContentsTool,
     private val setPageLiveTool: SetPageLiveTool,
+    private val store: HtmlPageStore,
 ) {
+    @McpTool(
+        name = "get_artifact_metadata",
+        description = "Read an artifact's metadata, effective visibility, and public access deadline without changing it",
+    )
+    fun getArtifactMetadata(
+        @McpToolParam(description = "Published artifact id", required = true) id: String,
+    ): PublishedPage = requireNotNull(store.readMetadata(id)) { "page not found: $id" }
+
+    @McpTool(
+        name = "set_artifact_visibility",
+        description = """
+            Set internal or public access. Public access lasts 30 days.
+            Already-public artifacts keep their deadline. Expired artifacts can be shared again.
+        """,
+    )
+    fun setArtifactVisibility(
+        @McpToolParam(description = "Published artifact id", required = true) id: String,
+        @McpToolParam(description = "internal or public", required = true) visibility: String,
+    ): PublishedPage =
+        requireNotNull(store.setVisibility(id, ArtifactVisibility.parse(visibility), currentUser())) { "page not found: $id" }
+
     @McpTool(
         name = "publish_html",
         description = "Publish an HTML or Markdown page for team sharing and return a link",

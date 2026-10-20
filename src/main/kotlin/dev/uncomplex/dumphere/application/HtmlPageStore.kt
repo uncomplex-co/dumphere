@@ -10,7 +10,9 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.SecureRandom
+import java.time.Duration
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.Base64
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
@@ -77,7 +79,7 @@ class HtmlPageStore(
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
-        val existingEntity = pages.findById(id).orElse(null)
+        val existingEntity = pages.findByIdForUpdate(id)
         val existing = existingEntity?.toPublishedPage() ?: readLegacyMetadata(id) ?: return null
         val bytes = contents.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty()) { "contents must not be empty" }
@@ -138,15 +140,39 @@ class HtmlPageStore(
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
-        val existingEntity = pages.findById(id).orElse(null) ?: return null
+        val existingEntity = pages.findByIdForUpdate(id) ?: return null
         val user = updatedBy?.let { userProvisioning.provision(it) }
-        val updatedEntity = existingEntity.copy(
-            isLive = isLive,
-            updatedAt = Instant.now(),
-            updatedByUserId = user?.id,
-        )
+        val updatedEntity =
+            existingEntity.copy(
+                isLive = isLive,
+                updatedAt = Instant.now(),
+                updatedByUserId = user?.id,
+            )
         pages.save(updatedEntity)
         return updatedEntity.toPublishedPage()
+    }
+
+    @Transactional
+    fun setVisibility(
+        id: String,
+        visibility: ArtifactVisibility,
+        updatedBy: AuthenticatedUser?,
+    ): PublishedPage? {
+        if (!id.matches(ID_PATTERN)) return null
+
+        val existing = pages.findByIdForUpdate(id) ?: return null
+        val now = Instant.now().truncatedTo(ChronoUnit.MICROS)
+        val publicUntil =
+            when (visibility) {
+                ArtifactVisibility.INTERNAL -> null
+                ArtifactVisibility.PUBLIC -> existing.publicUntil?.takeIf { it.isAfter(now) } ?: now.plus(Duration.ofDays(30))
+            }
+        if (publicUntil == existing.publicUntil) return existing.toPublishedPage()
+
+        val user = updatedBy?.let { userProvisioning.provision(it) }
+        val updated = existing.copy(publicUntil = publicUntil, updatedAt = now, updatedByUserId = user?.id)
+        pages.save(updated)
+        return updated.toPublishedPage()
     }
 
     private fun PublishedPage.toEntity(
@@ -164,6 +190,7 @@ class HtmlPageStore(
         currentVersion = version,
         currentBytes = bytes,
         isLive = isLive,
+        publicUntil = publicUntil,
     )
 
     private fun PublishedPage.toVersionEntity(
@@ -190,6 +217,7 @@ class HtmlPageStore(
             version = currentVersion,
             bytes = currentBytes,
             isLive = isLive,
+            publicUntil = publicUntil,
         )
 
     private fun readLegacyHtml(id: String): String? {

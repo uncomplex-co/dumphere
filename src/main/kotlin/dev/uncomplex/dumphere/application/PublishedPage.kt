@@ -14,4 +14,8 @@ data class PublishedPage(
     val version: Int = 1,
     val bytes: Long,
     val isLive: Boolean = false,
-)
+    val publicUntil: Instant? = null,
+) {
+    val visibility: ArtifactVisibility
+        get() = if (publicUntil?.isAfter(Instant.now()) == true) ArtifactVisibility.PUBLIC else ArtifactVisibility.INTERNAL
+}

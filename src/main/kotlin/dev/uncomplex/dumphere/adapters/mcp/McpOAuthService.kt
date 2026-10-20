@@ -192,9 +192,10 @@ class McpOAuthService(
                         .issuedAt(now)
                         .expiresAt(now.plus(tokenLifetime))
                         .claim("client_id", client.clientId)
-                        .claim("email", stored.user.email)
-                        .claim("name", stored.user.displayName)
-                        .build(),
+                        .claims { claims ->
+                            stored.user.email?.let { claims["email"] = it }
+                            stored.user.displayName?.let { claims["name"] = it }
+                        }.build(),
                 ),
             )
 
@@ -241,9 +242,10 @@ class McpOAuthService(
                         .issuedAt(now)
                         .expiresAt(now.plus(tokenLifetime))
                         .claim("client_id", client.clientId)
-                        .claim("email", stored.user.email)
-                        .claim("name", stored.user.displayName)
-                        .build(),
+                        .claims { claims ->
+                            stored.user.email?.let { claims["email"] = it }
+                            stored.user.displayName?.let { claims["name"] = it }
+                        }.build(),
                 ),
             )
 

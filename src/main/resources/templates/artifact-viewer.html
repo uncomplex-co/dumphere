@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}} · dumphere</title>
+  <link rel="stylesheet" href="/viewer/viewer.css">
+  <script src="/viewer/viewer.js" defer></script>
+</head>
+<body data-id="{{ID}}" data-visibility="{{VISIBILITY}}" data-public-until="{{PUBLIC_UNTIL}}" data-version="{{VERSION}}" data-can-manage="{{CAN_MANAGE}}" data-can-view="{{CAN_VIEW}}" data-csrf="{{CSRF}}">
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></symbol>
+    <symbol id="icon-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
+    <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="5" cy="12" r="3"/><circle cx="18" cy="5" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8 10 7-4m-7 8 7 4"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></symbol>
+    <symbol id="icon-html" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 18"/></symbol>
+    <symbol id="icon-markdown" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 15V9l3 3 3-3v6m6-6v6m-2-2 2 2 2-2"/></symbol>
+  </svg>
+  <header class="header">
+    <div class="identity">
+      <span class="file-icon" title="{{FORMAT_LABEL}}"><svg aria-hidden="true"><use href="#icon-{{FORMAT}}"/></svg></span>
+      <div class="artifact-meta"><h1 class="title">{{TITLE}}</h1><div class="visibility" id="visibility" aria-live="polite"><svg aria-hidden="true"><use id="visibility-icon" href="#icon-lock"/></svg><span id="visibility-label">Internal</span><span id="remaining"></span></div></div>
+    </div>
+    <div class="actions">
+      <a class="button" id="download" data-testid="{{DOWNLOAD_ID}}" href="/p/{{ID}}/download" aria-label="Download artifact" title="Download original {{FORMAT_LABEL}}" {{CONTENT_HIDDEN}}><svg aria-hidden="true"><use href="#icon-download"/></svg><span class="button-label">Download</span></a>
+      <button class="button primary" id="share" data-testid="{{SHARE_ID}}" aria-label="Share artifact" {{MANAGEMENT_HIDDEN}}><svg aria-hidden="true"><use href="#icon-share"/></svg><span class="button-label">Share</span></button>
+      <span class="avatar" id="avatar" data-testid="{{AVATAR_ID}}" role="img" aria-label="{{NAME}}" title="{{NAME}} · {{EMAIL}}" {{MANAGEMENT_HIDDEN}}><img id="avatar-image" src="{{PICTURE}}" alt="" referrerpolicy="no-referrer" {{AVATAR_IMAGE_HIDDEN}}><span id="avatar-initials" {{AVATAR_INITIALS_HIDDEN}}>{{INITIALS}}</span></span>
+    </div>
+  </header>
+  <main id="content" {{CONTENT_HIDDEN}}><iframe id="artifact-frame" data-testid="{{FRAME_ID}}" title="{{TITLE}}" src="{{CONTENT_URL}}" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe></main>
+  <section class="blocked" id="blocked" {{BLOCKED_HIDDEN}}><div><svg class="blocked-icon" aria-hidden="true"><use href="#icon-lock"/></svg><h2>Internal Artifact</h2><p>Only team members can view this artifact.<br>Ask the sender to share it publicly.</p></div></section>
+  <dialog id="share-dialog" aria-labelledby="share-title" aria-describedby="share-subtitle">
+    <div class="dialog-header"><h2 id="share-title">Share Artifact</h2><button class="icon-button" id="close" data-testid="{{CLOSE_ID}}" aria-label="Close sharing dialog"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <p class="subtitle" id="share-subtitle">{{TITLE}}</p>
+    <form id="share-form">
+      <div class="dialog-body">
+        <fieldset><legend>Who can view</legend>
+          <label class="option"><input type="radio" id="internal" data-testid="{{INTERNAL_ID}}" name="visibility" value="internal"><svg aria-hidden="true"><use href="#icon-lock"/></svg><span><strong>Internal</strong><small>Team members must sign in to view or download.</small></span></label>
+          <label class="option"><input type="radio" id="public" data-testid="{{PUBLIC_ID}}" name="visibility" value="public"><svg aria-hidden="true"><use href="#icon-globe"/></svg><span><strong>Anyone with the link</strong><small>Anyone can view and download. No sign-in required.</small></span></label>
+        </fieldset>
+        <div class="notice" id="notice"><svg aria-hidden="true"><use href="#icon-clock"/></svg><p id="notice-text"></p></div>
+        <hr>
+        <div class="link-row"><input id="link" data-testid="{{URL_ID}}" readonly aria-label="Artifact URL"><button class="button" id="copy" type="button" data-testid="{{COPY_ID}}"><svg aria-hidden="true"><use href="#icon-copy"/></svg><span id="copy-label">Copy link</span></button></div>
+        <p class="hint" id="link-hint"></p>
+        <p class="error" id="error" role="alert"></p>
+      </div>
+      <div class="dialog-footer"><span id="feedback" role="status"></span><button class="button" id="cancel" data-testid="{{CANCEL_ID}}" type="button">Cancel</button><button class="button primary" id="save" data-testid="{{SAVE_ID}}" type="submit">Save</button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

@@ -1,5 +1,5 @@
 [tools]
-java = "temurin-24"
+java = "temurin-25"
 
 [tasks]
-start = "./gradlew bootRun --rerun-tasks"
+start = "./gradlew bootRun --rerun-tasks --args='--spring.profiles.active=local_dev'"

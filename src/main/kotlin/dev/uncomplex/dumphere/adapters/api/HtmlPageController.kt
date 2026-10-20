@@ -2,117 +2,138 @@ package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PageContentRenderer
 import dev.uncomplex.dumphere.application.PublishedPage
+import dev.uncomplex.dumphere.application.authenticatedUser
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.CacheControl
 import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.Authentication
+import org.springframework.security.web.csrf.CsrfToken
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.util.HtmlUtils
-import java.util.concurrent.TimeUnit
+import org.springframework.web.server.ResponseStatusException
+import java.nio.charset.StandardCharsets.UTF_8
 
 @RestController
 class HtmlPageController(
     private val store: HtmlPageStore,
     private val renderer: PageContentRenderer,
     private val properties: DumpHereApplicationProperties,
+    private val access: ArtifactAccess,
+    private val viewer: ArtifactViewer,
 ) {
-    @GetMapping("/p/{id}")
+    @GetMapping("/p/{id}", produces = [MediaType.TEXT_HTML_VALUE])
     fun show(
         @PathVariable id: String,
+        authentication: Authentication?,
+        request: HttpServletRequest,
     ): ResponseEntity<String> {
-        val page = store.readMetadata(id) ?: return ResponseEntity.notFound().build()
-        val contents = store.readContents(id) ?: return ResponseEntity.notFound().build()
-
-        return if (page.isLive) {
-            renderLiveShell(page)
-        } else {
-            renderPage(page, contents, noCache = false)
-        }
+        val page = store.readMetadata(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        val canView = access.canView(page, authentication)
+        val canManage = access.isMember(authentication)
+        val csrf = if (canManage) (request.getAttribute(CsrfToken::class.java.name) as? CsrfToken)?.token.orEmpty() else ""
+        return ResponseEntity
+            .status(if (canView) HttpStatus.OK else HttpStatus.FORBIDDEN)
+            .cacheControl(CacheControl.noStore())
+            .header(
+                "Content-Security-Policy",
+                "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https:; frame-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+            ).header("Referrer-Policy", "no-referrer")
+            .body(viewer.render(page.takeIf { canView }, authentication, canManage, csrf))
     }
 
     @GetMapping("/p/{id}/content")
     fun content(
         @PathVariable id: String,
+        authentication: Authentication?,
     ): ResponseEntity<String> {
-        val page = store.readMetadata(id) ?: return ResponseEntity.notFound().build()
-        val contents = store.readContents(id) ?: return ResponseEntity.notFound().build()
-        return renderPage(page, contents, noCache = true)
-    }
-
-    private fun renderLiveShell(page: PublishedPage): ResponseEntity<String> {
-        val escapedTitle = HtmlUtils.htmlEscape(page.title)
-        val html = """
-            <!doctype html>
-            <html lang="en">
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1">
-              <title>$escapedTitle</title>
-              <style>body{margin:0;height:100vh;overflow:hidden}</style>
-            </head>
-            <body>
-              <iframe id="content" src="/p/${page.id}/content" style="width:100%;height:100%;border:none;"></iframe>
-              <script>
-                (function() {
-                  var currentVersion = ${page.version};
-                  setInterval(function() {
-                    fetch('/api/pages/${page.id}/version', { credentials: 'same-origin' })
-                      .then(function(r) { return r.json(); })
-                      .then(function(data) {
-                        if (data.version !== currentVersion) {
-                          currentVersion = data.version;
-                          document.getElementById('content').src = '/p/${page.id}/content?t=' + Date.now();
-                        }
-                      })
-                      .catch(function() {});
-                  }, 10000);
-                })();
-              </script>
-            </body>
-            </html>
-        """.trimIndent()
-
+        val page = readable(id, authentication)
+        val contents = store.readContents(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         return ResponseEntity
             .ok()
             .contentType(MediaType.TEXT_HTML)
-            .cacheControl(CacheControl.noCache())
-            .header("Content-Security-Policy", shellCsp())
-            .header("X-Content-Type-Options", "nosniff")
-            .header("Referrer-Policy", "no-referrer")
-            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().build().toString())
-            .body(html)
+            .cacheControl(CacheControl.noStore())
+            .header(
+                "Content-Security-Policy",
+                "sandbox allow-scripts; default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src ${properties.cspScriptSrc}; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+            ).header("Referrer-Policy", "no-referrer")
+            .body(renderer.render(contents, page.contentFormat, page.title))
     }
 
-    private fun renderPage(
-        page: PublishedPage,
-        contents: String,
-        noCache: Boolean,
-    ): ResponseEntity<String> {
-        var builder = ResponseEntity
+    @GetMapping("/p/{id}/download")
+    fun download(
+        @PathVariable id: String,
+        authentication: Authentication?,
+    ): ResponseEntity<ByteArray> {
+        val page = readable(id, authentication)
+        val contents = store.readContents(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        val extension = if (page.contentFormat == PageContentFormat.MARKDOWN) ".md" else ".html"
+        val name =
+            page.title
+                .substringAfterLast('/')
+                .substringAfterLast('\\')
+                .replace(Regex("[\\p{C}<>:\"|?*]"), "")
+                .replace(Regex("\\.(html?|md|markdown)$", RegexOption.IGNORE_CASE), "")
+                .trim()
+                .take(120)
+                .ifBlank { "artifact" } + extension
+        return ResponseEntity
             .ok()
-            .contentType(MediaType.TEXT_HTML)
-            .header("Content-Security-Policy", contentCsp())
-            .header("X-Content-Type-Options", "nosniff")
-            .header("Referrer-Policy", "no-referrer")
-            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().build().toString())
-
-        builder = if (noCache) {
-            builder.cacheControl(CacheControl.noCache())
-        } else {
-            builder.cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
-        }
-
-        return builder.body(renderer.render(contents, page.contentFormat, page.title))
+            .contentType(MediaType("text", if (page.contentFormat == PageContentFormat.MARKDOWN) "markdown" else "html", UTF_8))
+            .cacheControl(CacheControl.noStore())
+            .header(
+                HttpHeaders.CONTENT_DISPOSITION,
+                ContentDisposition
+                    .attachment()
+                    .filename(name, UTF_8)
+                    .build()
+                    .toString(),
+            ).header("Content-Security-Policy", "sandbox; default-src 'none'")
+            .body(contents.toByteArray(UTF_8))
     }
 
-    private fun shellCsp(): String =
-        "default-src 'none'; frame-src 'self'; img-src data: https:; style-src 'unsafe-inline'; script-src ${properties.cspScriptSrc}; connect-src 'self'; base-uri 'none'; form-action 'none'"
+    @GetMapping("/p/{id}/status")
+    fun status(
+        @PathVariable id: String,
+        authentication: Authentication?,
+    ): ResponseEntity<ViewerStatus> {
+        val page = readable(id, authentication)
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ViewerStatus(page, access.isMember(authentication)))
+    }
 
-    private fun contentCsp(): String =
-        "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src ${properties.cspScriptSrc}; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    @PostMapping("/p/{id}/visibility")
+    fun visibility(
+        @PathVariable id: String,
+        @RequestBody request: SetVisibilityRequest,
+        authentication: Authentication?,
+    ): ResponseEntity<PublishedPage> {
+        if (!access.isMember(authentication)) throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        val page =
+            store.setVisibility(id, request.visibility, authentication.authenticatedUser())
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(page)
+    }
+
+    private fun readable(
+        id: String,
+        authentication: Authentication?,
+    ): PublishedPage {
+        val page = store.readMetadata(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        if (!access.canView(page, authentication)) throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        return page
+    }
 }
+
+data class ViewerStatus(
+    val artifact: PublishedPage,
+    val canManage: Boolean,
+)

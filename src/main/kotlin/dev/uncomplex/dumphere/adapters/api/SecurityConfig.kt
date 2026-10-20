@@ -27,8 +27,8 @@ import org.springframework.security.oauth2.client.web.DefaultOAuth2Authorization
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest
 import org.springframework.security.provisioning.InMemoryUserDetailsManager
-import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.AuthenticationEntryPoint
+import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
@@ -62,7 +62,7 @@ class SecurityConfig(
                 csrf.ignoringRequestMatchers(matcher("/mcp"), matcher("/api/**"), matcher("/connect/register"), matcher("/oauth2/token"))
             }.authorizeHttpRequests { requests ->
                 requests
-                    .requestMatchers("/error", "/login/**", "/oauth2/authorization/**", "/login/oauth2/**")
+                    .requestMatchers("/error", "/login/**", "/oauth2/authorization/**", "/login/oauth2/**", "/p/**", "/viewer/**")
                     .permitAll()
                     .requestMatchers(
                         "/.well-known/oauth-protected-resource",
@@ -155,8 +155,10 @@ class SecurityConfig(
             override fun resolve(request: HttpServletRequest): OAuth2AuthorizationRequest? =
                 customizeAuthorizationRequest(delegate.resolve(request), request)
 
-            override fun resolve(request: HttpServletRequest, clientRegistrationId: String): OAuth2AuthorizationRequest? =
-                customizeAuthorizationRequest(delegate.resolve(request, clientRegistrationId), request)
+            override fun resolve(
+                request: HttpServletRequest,
+                clientRegistrationId: String,
+            ): OAuth2AuthorizationRequest? = customizeAuthorizationRequest(delegate.resolve(request, clientRegistrationId), request)
         }
     }
 
@@ -191,7 +193,8 @@ class SecurityConfig(
         val stateId = RedirectUrlSupport.newStateId()
         RedirectUrlSupport.remember(request.session, stateId, redirectUrl)
 
-        return OAuth2AuthorizationRequest.from(resolvedRequest)
+        return OAuth2AuthorizationRequest
+            .from(resolvedRequest)
             .state(stateId)
             .build()
     }
@@ -202,7 +205,8 @@ class SecurityConfig(
     @Bean
     fun userDetailsService(passwordEncoder: PasswordEncoder): UserDetailsService =
         InMemoryUserDetailsManager(
-            User.withUsername(properties.apiUsername)
+            User
+                .withUsername(properties.apiUsername)
                 .password(passwordEncoder.encode(properties.apiPassword))
                 .roles("API")
                 .build(),

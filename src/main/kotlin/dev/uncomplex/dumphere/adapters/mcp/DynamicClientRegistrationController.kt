@@ -40,7 +40,7 @@ class DynamicClientRegistrationController(
                 .withId(UUID.randomUUID().toString())
                 .clientId(clientId)
                 .clientIdIssuedAt(Instant.now())
-                .clientSecret(passwordEncoder.encode(clientSecret))
+                .clientSecret(requireNotNull(passwordEncoder.encode(clientSecret)))
                 .clientName(request.clientName ?: "opencode")
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)

@@ -25,7 +25,7 @@ fun Authentication?.authenticatedUser(): AuthenticatedUser? {
 
         is OidcUser -> {
             AuthenticatedUser(
-                subject = principal.subject,
+                subject = principal.subject ?: authentication.name,
                 email = principal.email,
                 displayName = principal.fullName,
             )

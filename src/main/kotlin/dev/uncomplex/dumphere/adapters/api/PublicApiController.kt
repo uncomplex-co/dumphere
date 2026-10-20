@@ -1,5 +1,6 @@
 package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.application.ArtifactVisibility
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PublishedPage
@@ -18,6 +19,13 @@ import org.springframework.web.server.ResponseStatusException
 class PublicApiController(
     private val store: HtmlPageStore,
 ) {
+    @PostMapping("/api/pages/{id}/visibility")
+    fun visibility(
+        @PathVariable id: String,
+        @RequestBody request: SetVisibilityRequest,
+        authentication: Authentication,
+    ): PublishedPage = store.setVisibility(id, request.visibility, authentication.authenticatedUser()) ?: throw notFound()
+
     @GetMapping("/api/pages/{id}")
     fun metadata(
         @PathVariable id: String,
@@ -79,6 +87,10 @@ data class PublishFileResponse(
 
 data class SetLiveRequest(
     val live: Boolean,
+)
+
+data class SetVisibilityRequest(
+    val visibility: ArtifactVisibility,
 )
 
 private fun PublishFileRequest.toPageContentFormat(): PageContentFormat =
