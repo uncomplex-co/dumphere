@@ -42,3 +42,6 @@ out/
 ### Application Properties ###
 application-prod.properties
 application-local_dev.properties
+
+# roborev snapshots
+/.roborev/
