@@ -3,7 +3,6 @@ plugins {
     kotlin("plugin.spring") version "2.3.21"
     id("org.springframework.boot") version "4.1.1"
     id("io.spring.dependency-management") version "1.1.7"
-    id("org.graalvm.buildtools.native") version "0.11.5"
     id("com.github.spotbugs") version "6.5.4"
     id("com.diffplug.spotless") version "8.5.1"
 }
@@ -74,23 +73,6 @@ kotlin {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
-
-tasks
-    .matching {
-        it.name in
-            setOf(
-                "processAot",
-                "compileAotKotlin",
-                "compileAotJava",
-                "processAotResources",
-                "processTestAot",
-                "compileTestAotKotlin",
-                "compileTestAotJava",
-                "processTestAotResources",
-            )
-    }.configureEach {
-        enabled = false
-    }
 
 spotbugs {
     toolVersion = "4.9.8"
