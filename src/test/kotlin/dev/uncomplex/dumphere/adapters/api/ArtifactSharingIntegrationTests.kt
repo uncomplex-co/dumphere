@@ -40,7 +40,6 @@ import kotlin.test.assertTrue
         "spring.security.oauth2.client.registration.google.client-secret=test-secret",
         "spring.security.oauth2.client.registration.google.scope=openid,email,profile",
         "htmlshare.allowed-email-domain=example.com",
-        "htmlshare.csp-script-src=* 'unsafe-inline' 'unsafe-eval'",
         "spring.ai.mcp.server.protocol=STREAMABLE",
     ],
 )
@@ -214,6 +213,29 @@ class ArtifactSharingIntegrationTests {
         assertNull(deadline(id))
         assertInternalRequiresLogin(id)
         assertEquals(1, versionCount(id))
+    }
+
+    @Test
+    fun defaultContentCspAllowsBellhopDependenciesWithoutRelaxingTheViewerOrSandbox() {
+        val id = publish("<h1>Bellhop artifact</h1>")
+        setVisibility(id, "public")
+
+        val content = mvc.perform(get("/p/$id/content")).andExpect(status().isOk).andReturn().response
+        assertEquals(
+            "sandbox allow-scripts; default-src 'none'; img-src data: https:; " +
+                "style-src 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; " +
+                "script-src 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; " +
+                "connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+            content.getHeader("Content-Security-Policy"),
+        )
+        val shell = mvc.perform(get("/p/$id")).andExpect(status().isOk).andReturn().response
+        assertEquals(
+            "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https:; " +
+                "frame-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+            shell.getHeader("Content-Security-Policy"),
+        )
+        assertContains(shell.contentAsString, "sandbox=\"allow-scripts\"")
+        assertFalse(shell.contentAsString.contains("allow-same-origin"))
     }
 
     @Test

@@ -31,6 +31,33 @@ class HtmlPageController(
     private val access: ArtifactAccess,
     private val viewer: ArtifactViewer,
 ) {
+    private val viewerSecurityPolicy =
+        listOf(
+            "default-src 'none'",
+            "script-src 'self'",
+            "style-src 'self'",
+            "img-src 'self' https:",
+            "frame-src 'self'",
+            "connect-src 'self'",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "frame-ancestors 'self'",
+        ).joinToString("; ")
+
+    private val contentSecurityPolicy =
+        listOf(
+            "sandbox allow-scripts",
+            "default-src 'none'",
+            "img-src data: https:",
+            "style-src ${properties.cspStyleSrc}",
+            "script-src ${properties.cspScriptSrc}",
+            "font-src ${properties.cspFontSrc}",
+            "connect-src 'none'",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "frame-ancestors 'self'",
+        ).joinToString("; ")
+
     @GetMapping("/p/{id}", produces = [MediaType.TEXT_HTML_VALUE])
     fun show(
         @PathVariable id: String,
@@ -44,10 +71,8 @@ class HtmlPageController(
         return ResponseEntity
             .status(if (canView) HttpStatus.OK else HttpStatus.FORBIDDEN)
             .cacheControl(CacheControl.noStore())
-            .header(
-                "Content-Security-Policy",
-                "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https:; frame-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
-            ).header("Referrer-Policy", "no-referrer")
+            .header("Content-Security-Policy", viewerSecurityPolicy)
+            .header("Referrer-Policy", "no-referrer")
             .body(viewer.render(page.takeIf { canView }, authentication, canManage, csrf))
     }
 
@@ -62,10 +87,8 @@ class HtmlPageController(
             .ok()
             .contentType(MediaType.TEXT_HTML)
             .cacheControl(CacheControl.noStore())
-            .header(
-                "Content-Security-Policy",
-                "sandbox allow-scripts; default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src ${properties.cspScriptSrc}; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
-            ).header("Referrer-Policy", "no-referrer")
+            .header("Content-Security-Policy", contentSecurityPolicy)
+            .header("Referrer-Policy", "no-referrer")
             .body(renderer.render(contents, page.contentFormat, page.title))
     }
 
