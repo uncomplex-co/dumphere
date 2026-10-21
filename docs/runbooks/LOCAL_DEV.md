@@ -129,16 +129,19 @@ their distinct HTML contents.
 
 ## 5. Verify the browser flow
 
-1. Open `/login` and complete Google sign-in with an allowed account.
-2. Open the returned `$PAGE_URL`.
+1. Open the returned `$PAGE_URL` without a browser session. Expect a redirect to
+   `/login` that preserves the artifact URL.
+2. Complete Google sign-in with an allowed account.
 3. Confirm the browser returns to the page and renders **Local version 2**.
 4. Refresh and confirm the session remains authenticated.
 
 Use **Share** to select **Anyone with the link** and save. Open the same URL in
 an incognito window: expect the artifact and Download action, without Share,
 avatar, or sign-in controls. Download must return the raw HTML/Markdown, not the
-viewer wrapper. Set it back to Internal and verify anonymous viewing, content,
-and download requests are rejected. New artifacts start Internal.
+viewer wrapper. Set it back to Internal and verify anonymous page, content, and
+download requests enter the login flow instead of serving the artifact. New
+artifacts start Internal. The viewer's status endpoint returns 401 when login is
+required so the viewer can reload into that same flow.
 
 Sharing lasts 30 days and never renews implicitly. Inspect `html_pages.public_until`
 to verify the committed deadline; do not shorten deadlines on someone else's

@@ -75,8 +75,9 @@ not the product name.
   and the exact deadline in the dialog.
 - Download returns the original UTF-8 source as `.html` or `.md`, not the viewer
   wrapper or rendered Markdown. Download access follows the artifact's visibility.
-- Anonymous requests for an internal or expired artifact show an access-blocked
-  page, without a sign-in button or the artifact's title/content.
+- Anonymous visits to internal or expired artifacts enter the Google login flow
+  and return to the requested artifact after sign-in. Public artifacts open
+  directly without triggering login.
 
 ### Revise content without changing the link
 

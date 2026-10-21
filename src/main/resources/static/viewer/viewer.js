@@ -139,7 +139,12 @@
       const requestRevision = revision;
       const response = await fetch('/p/' + id + '/status', { credentials: 'same-origin', cache: 'no-store' });
       if (saving || requestRevision !== revision) return;
-      if ([401, 403, 404].includes(response.status)) {
+      if (response.status === 401) {
+        // A private artifact requires login again. Let the page's normal redirect preserve its URL.
+        location.reload();
+        return;
+      }
+      if ([403, 404].includes(response.status)) {
         canManage = false;
         canView = false;
         visibility = 'internal';

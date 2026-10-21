@@ -17,6 +17,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import tools.jackson.databind.ObjectMapper
+import java.net.URI
+import java.net.URLDecoder
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Timestamp
@@ -101,20 +103,63 @@ class ArtifactSharingIntegrationTests {
     }
 
     @Test
-    fun internalByDefaultAndAnonymousCannotReadAnyRepresentation() {
+    fun internalByDefaultAndAnonymousReadersEnterLoginFlow() {
         val id = publish("<h1>Internal secret</h1>")
 
         assertNull(deadline(id))
+        assertInternalRequiresLogin(id)
+        mvc.perform(get("/api/pages/$id")).andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun internalArtifactLoginPreservesTheReturnUrlAndResumesForAuthenticatedMembers() {
+        val id = publish("<h1>Internal secret</h1>")
+        val target = "/p/$id?view=full&section=release"
+        val redirect =
+            mvc
+                .perform(get(target))
+                .andExpect(status().isFound)
+                .andReturn()
+                .response
+        val login = assertNotNull(redirect.redirectedUrl)
+        assertTrue(login.startsWith("/login?redirectUrl="))
+        assertEquals(target, URLDecoder.decode(login.substringAfter("redirectUrl="), Charsets.UTF_8))
+        assertFalse(redirect.contentAsString.contains("Internal secret"))
+
+        val loginPage =
+            mvc
+                .perform(get(URI.create(login)))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        assertContains(loginPage, "Continue with Google")
+        assertContains(loginPage, "/oauth2/authorization/google?redirectUrl=")
+        val resumed =
+            mvc
+                .perform(get(URI.create(login)).with(member()))
+                .andExpect(status().isFound)
+                .andReturn()
+                .response
+        assertEquals(target, resumed.redirectedUrl)
+        mvc.perform(get(target).with(member())).andExpect(status().isOk)
+        mvc.perform(get("/p/$id/content").with(member())).andExpect(status().isOk)
+        assertNull(deadline(id))
+        assertEquals(1, versionCount(id))
+    }
+
+    @Test
+    fun anAuthenticatedAccountOutsideTheAllowedDomainIsForbiddenRatherThanSentBackToLogin() {
+        val id = publish("<h1>Internal secret</h1>")
         for (path in listOf("", "/content", "/download", "/status")) {
             val response =
                 mvc
-                    .perform(get("/p/$id$path"))
+                    .perform(get("/p/$id$path").with(member("outsider@outside.test")))
                     .andExpect(status().isForbidden)
                     .andReturn()
                     .response
+            assertNull(response.redirectedUrl)
             assertFalse(response.contentAsString.contains("Internal secret"))
         }
-        mvc.perform(get("/api/pages/$id")).andExpect(status().isUnauthorized)
     }
 
     @Test
@@ -138,6 +183,7 @@ class ArtifactSharingIntegrationTests {
                 .response
         assertContains(shell.contentAsString, "sandbox=\"allow-scripts\"")
         assertContains(shell.contentAsString, "data-can-manage=\"false\"")
+        assertNull(shell.redirectedUrl)
         assertFalse(shell.contentAsString.contains("<h1>Interactive café"))
         assertFalse(shell.contentAsString.contains("Sign in"))
         assertEquals("no-store", shell.getHeader("Cache-Control"))
@@ -166,7 +212,7 @@ class ArtifactSharingIntegrationTests {
 
         setVisibility(id, "internal")
         assertNull(deadline(id))
-        for (path in listOf("", "/content", "/download", "/status")) mvc.perform(get("/p/$id$path")).andExpect(status().isForbidden)
+        assertInternalRequiresLogin(id)
         assertEquals(1, versionCount(id))
     }
 
@@ -274,7 +320,7 @@ class ArtifactSharingIntegrationTests {
                 .andReturn()
                 .response
         assertEquals("internal", json.readTree(metadata.contentAsString).path("visibility").asString())
-        for (path in listOf("", "/content", "/download", "/status")) mvc.perform(get("/p/$id$path")).andExpect(status().isForbidden)
+        assertInternalRequiresLogin(id)
         assertTrue(assertNotNull(deadline(id)).isBefore(Instant.now()))
         mvc.perform(get("/p/$id/content").with(member())).andExpect(status().isOk)
 
@@ -394,6 +440,26 @@ class ArtifactSharingIntegrationTests {
         assertFalse(disposition.contains("../"))
         assertContains(disposition, ".html")
         assertEquals("<p>original</p>", download.getContentAsString(Charsets.UTF_8))
+    }
+
+    private fun assertInternalRequiresLogin(id: String) {
+        for (path in listOf("", "/content", "/download")) {
+            val response =
+                mvc
+                    .perform(get("/p/$id$path"))
+                    .andExpect(status().isFound)
+                    .andReturn()
+                    .response
+            assertEquals(RedirectUrlSupport.loginUrl("/p/$id$path"), response.redirectedUrl)
+            assertTrue(response.contentAsString.isEmpty())
+        }
+        val state =
+            mvc
+                .perform(get("/p/$id/status"))
+                .andExpect(status().isUnauthorized)
+                .andReturn()
+                .response
+        assertNull(state.redirectedUrl)
     }
 
     private fun member(email: String = "alex@example.com") =

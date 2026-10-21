@@ -3,6 +3,7 @@ package dev.uncomplex.dumphere.adapters.api
 import dev.uncomplex.dumphere.adapters.mcp.OAuthMetadataEntryPoint
 import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
 import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
+import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.authenticatedUser
 import jakarta.servlet.http.HttpServletRequest
@@ -41,6 +42,8 @@ class SecurityConfig(
     private val clientRegistrationRepository: ClientRegistrationRepository,
     private val allowedEmailDomainPolicy: AllowedEmailDomainPolicy,
     private val userProvisioning: UserProvisioningService,
+    private val artifactAccess: ArtifactAccess,
+    private val pages: HtmlPageStore,
 ) {
     @Bean
     @Order(1)
@@ -62,7 +65,7 @@ class SecurityConfig(
                 csrf.ignoringRequestMatchers(matcher("/mcp"), matcher("/api/**"), matcher("/connect/register"), matcher("/oauth2/token"))
             }.authorizeHttpRequests { requests ->
                 requests
-                    .requestMatchers("/error", "/login/**", "/oauth2/authorization/**", "/login/oauth2/**", "/p/**", "/viewer/**")
+                    .requestMatchers("/error", "/login/**", "/oauth2/authorization/**", "/login/oauth2/**", "/viewer/**")
                     .permitAll()
                     .requestMatchers(
                         "/.well-known/oauth-protected-resource",
@@ -72,7 +75,18 @@ class SecurityConfig(
                         "/oauth2/token",
                         "/connect/register",
                     ).permitAll()
-                    .anyRequest()
+                    .requestMatchers(
+                        matcher("/p/{id}"),
+                        matcher("/p/{id}/content"),
+                        matcher("/p/{id}/download"),
+                        matcher("/p/{id}/status"),
+                    ).access { authentication, context ->
+                        val auth = authentication.get()
+                        AuthorizationDecision(
+                            artifactAccess.isMember(auth) ||
+                                context.variables["id"]?.let { pages.readMetadata(it) }?.let { artifactAccess.canView(it, auth) } == true,
+                        )
+                    }.anyRequest()
                     .access { authentication, _ ->
                         val auth = authentication.get()
                         AuthorizationDecision(
@@ -116,6 +130,8 @@ class SecurityConfig(
                 )
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/authorize"))
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/consent"))
+                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/status"))
+                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.FORBIDDEN), matcher("/p/{id}/visibility"))
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/p/**"))
             }
 
