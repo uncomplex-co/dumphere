@@ -1,11 +1,11 @@
 package dev.uncomplex.dumphere.application
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import dev.uncomplex.dumphere.ports.HtmlPageRepository
 import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
 import org.springframework.data.jdbc.core.JdbcAggregateTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import tools.jackson.databind.ObjectMapper
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path

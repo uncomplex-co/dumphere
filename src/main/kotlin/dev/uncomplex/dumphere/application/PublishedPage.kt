@@ -1,5 +1,7 @@
 package dev.uncomplex.dumphere.application
 
+import com.fasterxml.jackson.annotation.JsonAlias
+import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.Instant
 
 data class PublishedPage(
@@ -13,6 +15,9 @@ data class PublishedPage(
     val updatedBy: String? = null,
     val version: Int = 1,
     val bytes: Long,
+    @get:JsonProperty("live")
+    @param:JsonProperty("live")
+    @param:JsonAlias("isLive")
     val isLive: Boolean = false,
     val publicUntil: Instant? = null,
 ) {

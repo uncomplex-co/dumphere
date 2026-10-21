@@ -1,13 +1,13 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.security.oauth2.jwt.JwtClaimsSet
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.ObjectMapper
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -75,7 +75,7 @@ class McpServerIntegrationTests {
                 .path("result")
                 .path("serverInfo")
                 .path("name")
-                .asText(),
+                .asString(),
         )
         val session = initialized.headers().firstValue("Mcp-Session-Id").orElse(null)
         val notification =
@@ -92,8 +92,10 @@ class McpServerIntegrationTests {
         val names =
             payload(listed)
                 .path("result")
-                .path("tools")
-                .map { it.path("name").asText() }
+                .required("tools")
+                .asArray()
+                .values()
+                .map { it.path("name").asString() }
                 .toSet()
         assertEquals(
             setOf(

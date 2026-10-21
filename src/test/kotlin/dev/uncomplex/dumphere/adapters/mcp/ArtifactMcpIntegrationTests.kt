@@ -1,6 +1,5 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import dev.uncomplex.dumphere.testing.McpTestClient
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
 import org.springframework.beans.factory.annotation.Autowired
@@ -12,6 +11,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import tools.jackson.databind.ObjectMapper
 import java.sql.Timestamp
 import java.time.Instant
 import kotlin.test.Test
@@ -76,19 +76,19 @@ class ArtifactMcpIntegrationTests {
                         ),
                     ),
                 )
-            val id = published.path("id").asText()
+            val id = published.path("id").asString()
             assertTrue(id.isNotBlank())
-            assertEquals("internal", published.path("visibility").asText())
+            assertEquals("internal", published.path("visibility").asString())
             assertNull(deadline(id))
             assertEquals("# First", contents(id))
 
             val shared = client.metadata(client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "public")))
-            assertEquals("public", shared.path("visibility").asText())
+            assertEquals("public", shared.path("visibility").asString())
             val until = assertNotNull(deadline(id))
-            assertEquals(until, Instant.parse(shared.path("publicUntil").asText()))
+            assertEquals(until, Instant.parse(shared.path("publicUntil").asString()))
             val inspected = client.metadata(client.call("get_artifact_metadata", mapOf("id" to id)))
-            assertEquals("public", inspected.path("visibility").asText())
-            assertEquals(published.path("url").asText(), inspected.path("url").asText())
+            assertEquals("public", inspected.path("visibility").asString())
+            assertEquals(published.path("url").asString(), inspected.path("url").asString())
             assertEquals(until, deadline(id))
             client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "public"))
             assertEquals(until, deadline(id))
@@ -103,18 +103,18 @@ class ArtifactMcpIntegrationTests {
             val read = client.call("read_file_contents", mapOf("id" to id))
             assertContains(read.toString(), "# Third")
             val live = client.metadata(client.call("enable_live_reload", mapOf("id" to id, "live" to true)))
-            assertEquals("public", live.path("visibility").asText())
+            assertEquals("public", live.path("visibility").asString())
             assertEquals(true, jdbc.queryForObject("select is_live from html_pages where id = ?", Boolean::class.java, id))
             assertEquals(until, deadline(id))
 
             jdbc.update("update html_pages set public_until = ? where id = ?", Timestamp.from(Instant.now().minusSeconds(1)), id)
             val expired = client.metadata(client.call("get_artifact_metadata", mapOf("id" to id)))
-            assertEquals("internal", expired.path("visibility").asText())
+            assertEquals("internal", expired.path("visibility").asString())
             val reshared = client.metadata(client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "public")))
-            assertEquals("public", reshared.path("visibility").asText())
+            assertEquals("public", reshared.path("visibility").asString())
             assertTrue(assertNotNull(deadline(id)).isAfter(until))
             val revoked = client.metadata(client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "internal")))
-            assertEquals("internal", revoked.path("visibility").asText())
+            assertEquals("internal", revoked.path("visibility").asString())
             assertNull(deadline(id))
             assertEquals(3, jdbc.queryForObject("select count(*) from html_page_versions where page_id = ?", Int::class.java, id))
             assertEquals(

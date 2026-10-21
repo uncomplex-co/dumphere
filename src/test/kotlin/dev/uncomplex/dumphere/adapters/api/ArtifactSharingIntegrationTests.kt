@@ -1,6 +1,6 @@
 package dev.uncomplex.dumphere.adapters.api
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -16,9 +16,13 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import tools.jackson.databind.ObjectMapper
+import java.nio.file.Files
+import java.nio.file.Path
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -46,10 +50,54 @@ class ArtifactSharingIntegrationTests {
 
     @Autowired private lateinit var jdbc: JdbcTemplate
 
+    @Autowired private lateinit var properties: DumpHereApplicationProperties
+
     companion object {
         @JvmStatic
         @DynamicPropertySource
         fun database(registry: DynamicPropertyRegistry) = PostgresTestDatabase.configure(registry)
+    }
+
+    @Test
+    fun legacyMetadataAndContentAreReadableWithDefaultKotlinFieldsAndJavaTime() {
+        val id = UUID.randomUUID().toString()
+        val directory = Files.createDirectories(Path.of(properties.storageDir))
+        val metadata = directory.resolve("$id.json")
+        val content = directory.resolve("$id.html")
+        val raw = "<h1>Legacy café</h1>"
+        Files.writeString(
+            metadata,
+            """{"id":"$id","title":"Legacy café","url":"http://localhost:7331/p/$id","createdAt":"2026-01-02T03:04:05Z","bytes":${raw.toByteArray().size},"isLive":true}""",
+        )
+        Files.writeString(content, raw)
+
+        try {
+            val response =
+                mvc
+                    .perform(get("/api/pages/$id").with(httpBasic("htmlshare", "htmlshare")))
+                    .andExpect(status().isOk)
+                    .andReturn()
+                    .response
+            val page = json.readTree(response.contentAsString)
+            assertEquals(id, page.path("id").asString())
+            assertEquals("2026-01-02T03:04:05Z", page.path("createdAt").asString())
+            assertEquals(1, page.path("version").asInt())
+            assertEquals("internal", page.path("visibility").asString())
+            assertTrue(page.required("live").booleanValue())
+            assertFalse(page.has("isLive"))
+
+            val download =
+                mvc
+                    .perform(get("/p/$id/download").with(member()))
+                    .andExpect(status().isOk)
+                    .andReturn()
+                    .response
+            assertTrue(raw.toByteArray().contentEquals(download.contentAsByteArray))
+            assertEquals(0, versionCount(id))
+        } finally {
+            Files.deleteIfExists(metadata)
+            Files.deleteIfExists(content)
+        }
     }
 
     @Test
@@ -76,7 +124,7 @@ class ArtifactSharingIntegrationTests {
         val before = Instant.now()
 
         val shared = setVisibility(id, "public")
-        assertEquals("public", shared.path("visibility").asText())
+        assertEquals("public", shared.path("visibility").asString())
         val until = assertNotNull(deadline(id))
         assertTrue(Duration.between(before, until).toHours() in 719..720)
         assertEquals(1, committedVersion(id))
@@ -225,7 +273,7 @@ class ArtifactSharingIntegrationTests {
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response
-        assertEquals("internal", json.readTree(metadata.contentAsString).path("visibility").asText())
+        assertEquals("internal", json.readTree(metadata.contentAsString).path("visibility").asString())
         for (path in listOf("", "/content", "/download", "/status")) mvc.perform(get("/p/$id$path")).andExpect(status().isForbidden)
         assertTrue(assertNotNull(deadline(id)).isBefore(Instant.now()))
         mvc.perform(get("/p/$id/content").with(member())).andExpect(status().isOk)
@@ -382,7 +430,7 @@ class ArtifactSharingIntegrationTests {
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response
-        val url = json.readTree(response.contentAsString).path("url").asText()
+        val url = json.readTree(response.contentAsString).path("url").asString()
         assertTrue(url.contains("/p/"))
         return url.substringAfterLast('/')
     }
