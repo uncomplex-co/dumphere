@@ -12,6 +12,16 @@
   let toastTimer;
   let saving = false;
   let revision = 0;
+  let commentVersion;
+  let commentsRequest = 0;
+  let selectedThreadId = null;
+  let discussionEmpty = false;
+  let artifactsRequest = 0;
+  let attachedXpath = null;
+  let attachedRelativeX;
+  let attachedRelativeY;
+  let attachedVersion;
+  const interactions = new ArtifactInteractions($('artifact-frame'), $('artifact-annotations'));
   const daysLeft = () => Math.max(0, Math.ceil((Date.parse(publicUntil) - Date.now()) / 86400000));
   const dateText = () => new Intl.DateTimeFormat(undefined, { dateStyle: 'long', timeStyle: 'short' }).format(new Date(publicUntil));
   const currentUrl = () => location.href;
@@ -30,11 +40,23 @@
     $('visibility').classList.toggle('is-public', isPublic);
     $('remaining').textContent = isPublic && canManage ? '· ' + daysLeft() + ' days left' : '';
     $('share').hidden = !canManage;
+    $('artifacts-toggle').disabled = !canManage;
+    if (!canManage) {
+      closeArtifacts(false);
+      $('artifact-library-list').replaceChildren();
+    }
+    $('menu-share').disabled = !canManage;
+    $('menu-reload').disabled = !canView;
     $('avatar').hidden = !canManage;
     $('download').hidden = !canView;
+    $('comments-toggle').hidden = !canView;
     $('content').hidden = !canView;
     $('blocked').hidden = canView;
-    if (!canView) $('artifact-frame').src = 'about:blank';
+    if (!canView) {
+      $('artifact-frame').src = 'about:blank';
+      closeComments(false);
+      $('comments-list').replaceChildren();
+    }
     if (!canManage && $('share-dialog').open) $('share-dialog').close();
     if ($('share-dialog').open) selectionChanged();
     clearTimeout(expiryTimer);
@@ -51,6 +73,441 @@
       }, Math.max(0, Math.min(delay, 60000)));
     }
   }
+
+  const titleMenu = $('artifact-menu');
+  const titleTrigger = $('title-menu-trigger');
+  let focusLastMenuItem = false;
+  titleMenu.addEventListener('beforetoggle', event => {
+    if (event.newState !== 'open') return;
+    const bounds = titleTrigger.getBoundingClientRect();
+    titleMenu.style.left = Math.max(8, Math.min(bounds.left, innerWidth - 188)) + 'px';
+    titleMenu.style.top = bounds.bottom + 6 + 'px';
+  });
+  titleMenu.addEventListener('toggle', event => {
+    const open = event.newState === 'open';
+    titleTrigger.setAttribute('aria-expanded', String(open));
+    if (open) {
+      const items = titleMenu.querySelectorAll('[role="menuitem"]:not(:disabled)');
+      (focusLastMenuItem ? items[items.length - 1] : items[0])?.focus();
+      focusLastMenuItem = false;
+    }
+  });
+  titleTrigger.addEventListener('keydown', event => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    focusLastMenuItem = event.key === 'ArrowUp';
+    titleMenu.showPopover();
+  });
+  titleMenu.addEventListener('keydown', event => {
+    const items = Array.from(titleMenu.querySelectorAll('[role="menuitem"]:not(:disabled)'));
+    const index = items.indexOf(document.activeElement);
+    let next;
+    if (event.key === 'ArrowDown') next = (index + 1) % items.length;
+    else if (event.key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = items.length - 1;
+    else if (event.key === 'Tab') titleMenu.hidePopover();
+    if (next !== undefined) {
+      event.preventDefault();
+      items[next]?.focus();
+    }
+  });
+  $('menu-share').addEventListener('click', () => {
+    titleMenu.hidePopover();
+    $('share').click();
+  });
+  $('menu-reload').addEventListener('click', () => location.reload());
+
+  function closeArtifacts(restoreFocus = true) {
+    artifactsRequest += 1;
+    $('artifact-library').hidden = true;
+    $('artifacts-toggle').setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('artifacts-open');
+    if (restoreFocus) $('artifacts-toggle').focus();
+  }
+
+  function artifactLink(artifact) {
+    const item = document.createElement('li');
+    const link = document.createElement('a');
+    link.href = '/p/' + encodeURIComponent(artifact.id);
+    link.dataset.testid = $('artifact-library').dataset.linkTestid;
+    link.dataset.artifactId = artifact.id;
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', artifact.format === 'markdown' ? '#icon-markdown' : '#icon-html');
+    icon.append(use);
+    const meta = document.createElement('div');
+    meta.className = 'artifact-library-meta';
+    const name = document.createElement('span');
+    name.className = 'artifact-library-name';
+    name.textContent = artifact.title;
+    const date = document.createElement('time');
+    date.dateTime = artifact.createdAt;
+    date.textContent = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(artifact.createdAt));
+    meta.append(name, date);
+    link.append(icon, meta);
+    item.append(link);
+    return item;
+  }
+
+  async function loadArtifacts() {
+    const request = ++artifactsRequest;
+    $('artifacts-status').textContent = 'Loading artifacts...';
+    $('artifacts-retry').hidden = true;
+    try {
+      const response = await fetch('/account/artifacts?excludeId=' + encodeURIComponent(id), {
+        credentials: 'same-origin', cache: 'no-store'
+      });
+      if (!response.ok) throw new Error([401, 403].includes(response.status)
+        ? 'Sign in again to view your artifacts.' : 'Could not load your artifacts. Try again.');
+      const artifacts = await response.json();
+      if (request !== artifactsRequest || !canManage) return;
+      $('artifact-library-list').replaceChildren(...artifacts.map(artifactLink));
+      $('artifacts-status').textContent = artifacts.length ? '' : 'No other artifacts yet.';
+    } catch (error) {
+      if (request !== artifactsRequest) return;
+      $('artifacts-status').textContent = error.message;
+      $('artifacts-retry').hidden = false;
+    }
+  }
+
+  $('artifacts-toggle').addEventListener('click', () => {
+    if (!canManage) return;
+    if (!$('artifact-library').hidden) return closeArtifacts();
+    $('artifact-library').hidden = false;
+    $('artifacts-toggle').setAttribute('aria-expanded', 'true');
+    document.body.classList.add('artifacts-open');
+    $('artifacts-close').focus();
+    loadArtifacts();
+  });
+  $('artifacts-close').addEventListener('click', () => closeArtifacts());
+  $('artifacts-retry').addEventListener('click', loadArtifacts);
+  $('artifact-library').addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeArtifacts();
+    }
+  });
+
+  function closeComments(restoreFocus = true) {
+    commentsRequest += 1;
+    $('comments-panel').hidden = true;
+    $('comments-toggle').setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('comments-open');
+    interactions.setActive(false);
+    setElementSelection(false);
+    $('attached-composer').hidden = true;
+    if (!$('attached-comment-composer').submitting) $('attached-comment-composer').complete();
+    if (restoreFocus) $('comments-toggle').focus();
+  }
+
+  function commentElement(comment, firstInThread) {
+    const item = document.createElement('li');
+    item.className = 'comment';
+    item.dataset.commentId = comment.id;
+    item.dataset.testid = initial.commentTestid;
+    item.dataset.threadId = comment.threadId;
+    const meta = document.createElement('div');
+    meta.className = 'comment-meta';
+    const author = document.createElement('span');
+    author.className = 'comment-author';
+    author.textContent = comment.author;
+    const authorGroup = document.createElement('div');
+    authorGroup.className = 'comment-author-group';
+    const threadNumber = interactions.threadNumber(comment.threadId);
+    if (firstInThread && threadNumber !== undefined) {
+      const badge = document.createElement('span');
+      badge.className = 'comment-thread-number';
+      badge.textContent = threadNumber;
+      badge.setAttribute('aria-label', 'Thread ' + threadNumber);
+      authorGroup.append(badge);
+    }
+    authorGroup.append(author);
+    const time = document.createElement('time');
+    time.dateTime = comment.createdAt;
+    time.textContent = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(comment.createdAt));
+    const body = document.createElement('p');
+    body.className = 'comment-body';
+    body.textContent = comment.body;
+    meta.append(authorGroup, time);
+    item.append(meta, body);
+    if (comment.xpath) item.dataset.xpath = comment.xpath;
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    item.addEventListener('click', () => {
+      selectThread(comment.threadId);
+      if (comment.xpath) interactions.scrollTo(comment.xpath);
+    });
+    item.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        item.click();
+      }
+    });
+    return item;
+  }
+
+  function selectThread(threadId) {
+    selectedThreadId = threadId;
+    for (const item of $('comments-list').querySelectorAll('.comment')) {
+      item.classList.toggle('is-selected', item.dataset.threadId === String(threadId));
+    }
+    for (const thread of $('comments-list').children) {
+      const selected = thread.dataset.threadId === String(threadId);
+      thread.classList.toggle('is-selected', selected);
+      thread.querySelector('.thread-reply').hidden = !selected;
+    }
+  }
+
+  function updateAttachmentState() {
+    for (const item of $('comments-list').querySelectorAll('.comment')) {
+      if (!item.dataset.xpath) continue;
+      const found = !!interactions.find(item.dataset.xpath);
+      item.classList.toggle('is-attached', found);
+    }
+  }
+
+  interactions.addEventListener('layout', updateAttachmentState);
+  interactions.addEventListener('thread-select', event => {
+    selectThread(event.detail.threadId);
+    const item = Array.from($('comments-list').querySelectorAll('.comment')).find(item => item.dataset.threadId === String(event.detail.threadId));
+    item?.scrollIntoView({ block: 'nearest' });
+    item?.focus({ preventScroll: true });
+  });
+  interactions.addEventListener('element-select', event => {
+    const composer = $('attached-comment-composer');
+    if (composer.submitting) return;
+    attachedXpath = event.detail.xpath;
+    attachedRelativeX = event.detail.relativeX;
+    attachedRelativeY = event.detail.relativeY;
+    attachedVersion = version;
+    $('attached-composer').hidden = false;
+    composer.show();
+    interactions.scheduleLayout();
+  });
+  function setElementSelection(selecting) {
+    interactions.setSelecting(selecting);
+    $('element-selection').setAttribute('aria-pressed', String(interactions.selecting));
+    $('element-selection').title = interactions.selecting
+      ? 'Stop selecting elements (Escape)' : 'Select elements for comments';
+  }
+
+  function escapeComments() {
+    if (interactions.selecting) setElementSelection(false);
+    else closeComments();
+  }
+
+  $('element-selection').addEventListener('click', () => setElementSelection(!interactions.selecting));
+  interactions.addEventListener('escape', escapeComments);
+  interactions.addEventListener('artifact-load', () => {
+    // Keep the original XPath if a live update removes the selected element.
+    if (!attachedXpath || $('attached-composer').hidden) return;
+    const target = interactions.find(attachedXpath);
+    if (target) interactions.selected = target;
+    else {
+      $('attached-composer').hidden = true;
+      notify('The selected element is no longer present. Select an element again.');
+    }
+  });
+
+  function renderThreads(comments) {
+    const threads = new Map();
+    for (const comment of comments) {
+      if (!threads.has(comment.threadId)) {
+        const thread = document.createElement('li');
+        thread.className = 'comment-thread';
+        thread.dataset.threadId = comment.threadId;
+        thread.dataset.testid = initial.threadTestid;
+        const messages = document.createElement('ol');
+        messages.className = 'thread-comments';
+        messages.setAttribute('aria-label', 'Thread comments, oldest first');
+        thread.append(messages);
+        threads.set(comment.threadId, thread);
+      }
+      const messages = threads.get(comment.threadId).firstElementChild;
+      messages.append(commentElement(comment, messages.children.length === 0));
+    }
+    for (const [threadId, thread] of threads) {
+      thread.append(replyControls(threadId));
+    }
+    $('comments-list').replaceChildren(...threads.values());
+    selectThread(selectedThreadId);
+  }
+
+  function replyControls(threadId) {
+    const footer = document.createElement('div');
+    footer.className = 'thread-reply';
+    footer.hidden = true;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'thread-reply-button';
+    button.dataset.testid = initial.replyTestid;
+    button.textContent = 'Reply...';
+    const composer = document.createElement('comment-composer');
+    composer.hidden = true;
+    composer.setAttribute('compact', '');
+    composer.setAttribute('label', 'Reply');
+    composer.setAttribute('placeholder', 'Write a reply...');
+    composer.setAttribute('submit-label', 'Reply');
+    composer.dataset.bodyTestid = initial.commentBodyTestid;
+    composer.dataset.postTestid = initial.commentPostTestid;
+    composer.dataset.cancelTestid = initial.commentCancelTestid;
+    button.addEventListener('click', () => {
+      composer.dataset.version = version;
+      button.hidden = true;
+      composer.show();
+    });
+    const cancel = () => {
+      composer.complete();
+      button.hidden = false;
+      button.focus();
+    };
+    composer.addEventListener('comment-cancel', cancel);
+    composer.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !composer.submitting) {
+        event.stopPropagation();
+        cancel();
+      }
+    });
+    composer.addEventListener('comment-submit', async event => {
+      if (!canView) return composer.fail('Your access may have changed. Reload the page before replying.');
+      commentsRequest += 1;
+      try {
+        const response = await fetch('/p/' + id + '/threads/' + threadId + '/comments', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': initial.csrf },
+          body: JSON.stringify({ body: event.detail.body, version: Number(composer.dataset.version) })
+        });
+        if (!response.ok) throw new Error([401, 403].includes(response.status)
+          ? 'Your access may have changed. Reload the page before replying.'
+          : 'Could not post your reply. Try again.');
+        const reply = await response.json();
+        composer.complete();
+        button.hidden = false;
+        if (canView && !$('comments-panel').hidden) {
+          await loadComments();
+          const currentThread = Array.from($('comments-list').children).find(thread => thread.dataset.threadId === String(threadId));
+          const message = Array.from(currentThread?.querySelectorAll('.comment') || []).find(item => item.dataset.commentId === String(reply.id));
+          if (String(selectedThreadId) === String(threadId)) {
+            message?.scrollIntoView({ block: 'nearest' });
+            currentThread?.querySelector('.thread-reply-button')?.focus({ preventScroll: true });
+          }
+        }
+      } catch (error) {
+        composer.fail(error.message === 'Failed to fetch'
+          ? 'Could not post your reply. Check your connection and try again.' : error.message);
+      }
+    });
+    footer.append(button, composer);
+    return footer;
+  }
+
+  async function loadComments() {
+    const request = ++commentsRequest;
+    $('comments-status').textContent = 'Loading comments...';
+    $('discussion-empty').hidden = true;
+    $('comments-retry').hidden = true;
+    try {
+      const response = await fetch('/p/' + id + '/comments', { credentials: 'same-origin', cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not load comments. Try again.');
+      const comments = await response.json();
+      if (request !== commentsRequest || !canView) return;
+      interactions.setThreads(comments);
+      renderThreads(comments);
+      updateAttachmentState();
+      $('comments-status').textContent = '';
+      discussionEmpty = comments.length === 0;
+      $('discussion-empty').hidden = !discussionEmpty || !$('comment-composer').hidden;
+    } catch (error) {
+      if (request !== commentsRequest) return;
+      $('comments-status').textContent = error.message;
+      $('comments-retry').hidden = false;
+    }
+  }
+
+  $('comments-toggle').addEventListener('click', () => {
+    if (!$('comments-panel').hidden) return closeComments();
+    if (!canView) return;
+    $('comments-panel').hidden = false;
+    $('comments-toggle').setAttribute('aria-expanded', 'true');
+    document.body.classList.add('comments-open');
+    interactions.setActive(initial.format === 'html');
+    $('comments-close').focus();
+    loadComments();
+  });
+  $('comments-close').addEventListener('click', () => closeComments());
+  $('comments-retry').addEventListener('click', loadComments);
+  $('comments-panel').addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      escapeComments();
+    }
+  });
+  $('comment-add').addEventListener('click', () => {
+    if (!$('attached-comment-composer').submitting) {
+      $('attached-composer').hidden = true;
+      $('attached-comment-composer').complete();
+      interactions.clearSelection();
+    }
+    if ($('comment-composer').hidden) commentVersion = version;
+    $('comment-composer').show();
+    $('discussion-empty').hidden = true;
+  });
+  $('discussion-start').addEventListener('click', () => $('comment-add').click());
+  $('comment-composer').addEventListener('comment-cancel', () => {
+    $('discussion-empty').hidden = !discussionEmpty;
+    $('comment-add').focus();
+  });
+  $('attached-comment-composer').addEventListener('comment-cancel', () => {
+    $('attached-composer').hidden = true;
+    interactions.clearSelection();
+    $('comments-toggle').focus();
+  });
+  $('attached-composer').addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !$('attached-comment-composer').submitting) {
+      setElementSelection(false);
+      $('attached-comment-composer').complete();
+      $('attached-composer').hidden = true;
+      interactions.clearSelection();
+      $('comments-toggle').focus();
+    }
+  });
+  async function postComment(event) {
+    const composer = event.currentTarget;
+    if (!canView) return composer.fail('Your access may have changed. Reload the page before posting.');
+    commentsRequest += 1;
+    try {
+      const response = await fetch('/p/' + id + '/comments', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': initial.csrf },
+        body: JSON.stringify({
+          body: event.detail.body,
+          version: composer === $('attached-comment-composer') ? attachedVersion : commentVersion,
+          xpath: composer === $('attached-comment-composer') ? attachedXpath : null,
+          relativeX: composer === $('attached-comment-composer') ? attachedRelativeX : null,
+          relativeY: composer === $('attached-comment-composer') ? attachedRelativeY : null
+        })
+      });
+      if (!response.ok) throw new Error([401, 403].includes(response.status)
+        ? 'Your access may have changed. Reload the page before posting.'
+        : 'Could not post your comment. Try again.');
+      const comment = await response.json();
+      selectedThreadId = comment.threadId;
+      composer.complete();
+      if (composer === $('attached-comment-composer')) {
+        $('attached-composer').hidden = true;
+        interactions.clearSelection();
+      }
+      $('comment-add').focus();
+      if (canView && !$('comments-panel').hidden) await loadComments();
+    } catch (error) {
+      composer.fail(error.message === 'Failed to fetch'
+        ? 'Could not post your comment. Check your connection and try again.' : error.message);
+    }
+  }
+  $('comment-composer').addEventListener('comment-submit', postComment);
+  $('attached-comment-composer').addEventListener('comment-submit', postComment);
 
   function selectionChanged() {
     const selected = $('public').checked ? 'public' : 'internal';

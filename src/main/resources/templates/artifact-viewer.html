@@ -1,53 +1,86 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{TITLE}} · dumphere</title>
+  <title th:text="|${TITLE} · dumphere|">Artifact · dumphere</title>
   <link rel="stylesheet" href="/viewer/viewer.css">
+  <script src="/viewer/comment-composer.js" defer></script>
+  <script src="/viewer/artifact-interactions.js" defer></script>
   <script src="/viewer/viewer.js" defer></script>
 </head>
-<body data-id="{{ID}}" data-visibility="{{VISIBILITY}}" data-public-until="{{PUBLIC_UNTIL}}" data-version="{{VERSION}}" data-can-manage="{{CAN_MANAGE}}" data-can-view="{{CAN_VIEW}}" data-csrf="{{CSRF}}">
+<body th:attr="data-id=${ID},data-format=${FORMAT},data-comment-testid=${COMMENT_ID},data-thread-testid=${THREAD_ID},data-reply-testid=${THREAD_REPLY_ID},data-comment-body-testid=${COMMENT_BODY_ID},data-comment-post-testid=${COMMENT_POST_ID},data-comment-cancel-testid=${COMMENT_CANCEL_ID},data-visibility=${VISIBILITY},data-public-until=${PUBLIC_UNTIL},data-version=${VERSION},data-can-manage=${CAN_MANAGE},data-can-view=${CAN_VIEW},data-csrf=${CSRF}">
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></symbol>
     <symbol id="icon-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
     <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
     <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="5" cy="12" r="3"/><circle cx="18" cy="5" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8 10 7-4m-7 8 7 4"/></symbol>
     <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-comments" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 1-8 8H5l-4 3V11a9 9 0 0 1 19 0Z"/><path d="M7 9h8M7 13h5"/></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="icon-select-element" viewBox="0 0 24 24"><path stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672Zm-7.518-.267A8.25 8.25 0 1 1 20.25 10.5M8.288 14.212A5.25 5.25 0 1 1 17.25 10.5"/></symbol>
     <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
     <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="icon-reload" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 6M20 4v7h-7"/></symbol>
     <symbol id="icon-html" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 18"/></symbol>
     <symbol id="icon-markdown" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 15V9l3 3 3-3v6m6-6v6m-2-2 2 2 2-2"/></symbol>
   </svg>
   <header class="header">
     <div class="identity">
-      <span class="file-icon" title="{{FORMAT_LABEL}}"><svg aria-hidden="true"><use href="#icon-{{FORMAT}}"/></svg></span>
-      <div class="artifact-meta"><h1 class="title">{{TITLE}}</h1><div class="visibility" id="visibility" aria-live="polite"><svg aria-hidden="true"><use id="visibility-icon" href="#icon-lock"/></svg><span id="visibility-label">Internal</span><span id="remaining"></span></div></div>
+      <button class="file-icon" id="artifacts-toggle" th:attr="data-testid=${ARTIFACTS_ID}" th:title="${CAN_MANAGE ? 'Your artifacts' : FORMAT_LABEL}" th:disabled="${!CAN_MANAGE}" type="button" aria-label="Your artifacts" aria-expanded="false" aria-controls="artifact-library"><svg aria-hidden="true"><use th:href="|#icon-${FORMAT}|"/></svg></button>
+      <div class="artifact-meta"><h1 class="title"><button class="title-menu-trigger" id="title-menu-trigger" th:attr="data-testid=${TITLE_MENU_ID}" type="button" popovertarget="artifact-menu" aria-haspopup="menu" aria-expanded="false" aria-controls="artifact-menu" th:disabled="${!CAN_VIEW}"><span th:text="${TITLE}">Artifact</span><svg aria-hidden="true"><use href="#icon-chevron"/></svg></button></h1><div class="visibility" id="visibility" aria-live="polite"><svg aria-hidden="true"><use id="visibility-icon" href="#icon-lock"/></svg><span id="visibility-label">Internal</span><span id="remaining"></span></div></div>
     </div>
     <div class="actions">
-      <a class="button" id="download" data-testid="{{DOWNLOAD_ID}}" href="/p/{{ID}}/download" aria-label="Download artifact" title="Download original {{FORMAT_LABEL}}" {{CONTENT_HIDDEN}}><svg aria-hidden="true"><use href="#icon-download"/></svg><span class="button-label">Download</span></a>
-      <button class="button primary" id="share" data-testid="{{SHARE_ID}}" aria-label="Share artifact" {{MANAGEMENT_HIDDEN}}><svg aria-hidden="true"><use href="#icon-share"/></svg><span class="button-label">Share</span></button>
-      <span class="avatar" id="avatar" data-testid="{{AVATAR_ID}}" role="img" aria-label="{{NAME}}" title="{{NAME}} · {{EMAIL}}" {{MANAGEMENT_HIDDEN}}><img id="avatar-image" src="{{PICTURE}}" alt="" referrerpolicy="no-referrer" {{AVATAR_IMAGE_HIDDEN}}><span id="avatar-initials" {{AVATAR_INITIALS_HIDDEN}}>{{INITIALS}}</span></span>
+      <button class="icon-button comments-toggle" id="comments-toggle" th:attr="data-testid=${COMMENTS_ID}" aria-label="Comments" title="Comments" aria-expanded="false" aria-controls="comments-panel" th:hidden="${!CAN_VIEW}"><svg aria-hidden="true"><use href="#icon-comments"/></svg></button>
+      <a class="button" id="download" th:attr="data-testid=${DOWNLOAD_ID}" th:href="|/p/${ID}/download|" aria-label="Download artifact" th:title="|Download original ${FORMAT_LABEL}|" th:hidden="${!CAN_VIEW}"><svg aria-hidden="true"><use href="#icon-download"/></svg><span class="button-label">Download</span></a>
+      <button class="button primary" id="share" th:attr="data-testid=${SHARE_ID}" aria-label="Share artifact" th:hidden="${!CAN_MANAGE}"><svg aria-hidden="true"><use href="#icon-share"/></svg><span class="button-label">Share</span></button>
+      <span class="avatar" id="avatar" th:attr="data-testid=${AVATAR_ID},aria-label=${NAME}" role="img" th:title="|${NAME} · ${EMAIL}|" th:hidden="${!CAN_MANAGE}"><img id="avatar-image" th:src="${PICTURE}" alt="" referrerpolicy="no-referrer" th:hidden="${!HAS_PICTURE}"><span id="avatar-initials" th:hidden="${HAS_PICTURE}" th:text="${INITIALS}">TM</span></span>
     </div>
   </header>
-  <main id="content" {{CONTENT_HIDDEN}}><iframe id="artifact-frame" data-testid="{{FRAME_ID}}" title="{{TITLE}}" src="{{CONTENT_URL}}" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe></main>
-  <section class="blocked" id="blocked" {{BLOCKED_HIDDEN}}><div><svg class="blocked-icon" aria-hidden="true"><use href="#icon-lock"/></svg><h2>Internal Artifact</h2><p>Only team members can view this artifact.<br>Ask the sender to share it publicly.</p></div></section>
+  <aside class="artifact-library" id="artifact-library" aria-labelledby="artifact-library-title" th:attr="data-link-testid=${ARTIFACT_LINK_ID}" hidden>
+    <div class="artifact-library-header"><h2 id="artifact-library-title">Your artifacts</h2><button class="icon-button" id="artifacts-close" th:attr="data-testid=${ARTIFACTS_CLOSE_ID}" type="button" aria-label="Close your artifacts"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <p class="library-status" id="artifacts-status" role="status"></p>
+    <button class="button library-retry" id="artifacts-retry" th:attr="data-testid=${ARTIFACTS_RETRY_ID}" type="button" hidden>Try again</button>
+    <nav aria-label="Your other artifacts"><ol class="artifact-library-list" id="artifact-library-list"></ol></nav>
+  </aside>
+  <div class="artifact-menu" id="artifact-menu" popover role="menu" aria-labelledby="title-menu-trigger">
+    <button id="menu-share" th:attr="data-testid=${TITLE_SHARE_ID}" role="menuitem" type="button" th:disabled="${!CAN_MANAGE}"><svg aria-hidden="true"><use href="#icon-share"/></svg>Share</button>
+    <button id="menu-reload" th:attr="data-testid=${TITLE_RELOAD_ID}" role="menuitem" type="button" th:disabled="${!CAN_VIEW}"><svg aria-hidden="true"><use href="#icon-reload"/></svg>Reload</button>
+  </div>
+  <main id="content" th:hidden="${!CAN_VIEW}"><iframe id="artifact-frame" th:attr="data-testid=${FRAME_ID}" th:title="${TITLE}" th:src="${CONTENT_URL}" sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer"></iframe></main>
+  <div class="artifact-annotations" id="artifact-annotations" th:attr="data-pin-testid=${THREAD_PIN_ID}" hidden>
+    <div class="element-highlight" id="element-highlight" hidden></div>
+    <div id="thread-pins"></div>
+    <div class="attached-composer" id="attached-composer" hidden>
+      <comment-composer id="attached-comment-composer" th:attr="data-body-testid=${COMMENT_BODY_ID},data-post-testid=${COMMENT_POST_ID},data-cancel-testid=${COMMENT_CANCEL_ID}" hidden></comment-composer>
+    </div>
+  </div>
+  <aside class="comments-panel" id="comments-panel" aria-labelledby="comments-title" hidden>
+    <div class="comments-header"><h2 id="comments-title">Discussion</h2><div class="actions"><button class="icon-button selection-toggle" id="element-selection" th:attr="data-testid=${ELEMENT_SELECTION_ID}" th:hidden="${FORMAT != 'html'}" aria-label="Select elements for comments" aria-pressed="false" title="Select elements for comments"><svg aria-hidden="true"><use href="#icon-select-element"/></svg></button><button class="icon-button" id="comment-add" th:attr="data-testid=${COMMENT_ADD_ID}" aria-label="Add comment" title="Add comment"><svg aria-hidden="true"><use href="#icon-plus"/></svg></button><button class="icon-button" id="comments-close" th:attr="data-testid=${COMMENTS_CLOSE_ID}" aria-label="Close comments" title="Close comments"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div></div>
+    <comment-composer id="comment-composer" th:attr="data-body-testid=${COMMENT_BODY_ID},data-post-testid=${COMMENT_POST_ID},data-cancel-testid=${COMMENT_CANCEL_ID}" hidden></comment-composer>
+    <p class="comments-status" id="comments-status" role="status"></p>
+    <button class="button comments-retry" id="comments-retry" th:attr="data-testid=${COMMENT_RETRY_ID}" hidden>Try again</button>
+    <div class="discussion-empty" id="discussion-empty" hidden><p>Start a discussion</p><button class="button" id="discussion-start" th:attr="data-testid=${START_DISCUSSION_ID}" type="button">Add comment</button></div>
+    <ol class="comments-list" id="comments-list" aria-label="Threads, latest activity first"></ol>
+  </aside>
+  <section class="blocked" id="blocked" th:hidden="${CAN_VIEW}"><div><svg class="blocked-icon" aria-hidden="true"><use href="#icon-lock"/></svg><h2>Internal Artifact</h2><p>Only team members can view this artifact.<br>Ask the sender to share it publicly.</p></div></section>
   <dialog id="share-dialog" aria-labelledby="share-title" aria-describedby="share-subtitle">
-    <div class="dialog-header"><h2 id="share-title">Share Artifact</h2><button class="icon-button" id="close" data-testid="{{CLOSE_ID}}" aria-label="Close sharing dialog"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div>
-    <p class="subtitle" id="share-subtitle">{{TITLE}}</p>
+    <div class="dialog-header"><h2 id="share-title">Share Artifact</h2><button class="icon-button" id="close" th:attr="data-testid=${CLOSE_ID}" aria-label="Close sharing dialog"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <p class="subtitle" id="share-subtitle" th:text="${TITLE}">Artifact</p>
     <form id="share-form">
       <div class="dialog-body">
         <fieldset><legend>Who can view</legend>
-          <label class="option"><input type="radio" id="internal" data-testid="{{INTERNAL_ID}}" name="visibility" value="internal"><svg aria-hidden="true"><use href="#icon-lock"/></svg><span><strong>Internal</strong><small>Team members must sign in to view or download.</small></span></label>
-          <label class="option"><input type="radio" id="public" data-testid="{{PUBLIC_ID}}" name="visibility" value="public"><svg aria-hidden="true"><use href="#icon-globe"/></svg><span><strong>Anyone with the link</strong><small>Anyone can view and download. No sign-in required.</small></span></label>
+          <label class="option"><input type="radio" id="internal" th:attr="data-testid=${INTERNAL_ID}" name="visibility" value="internal"><svg aria-hidden="true"><use href="#icon-lock"/></svg><span><strong>Internal</strong><small>Team members must sign in to view or download.</small></span></label>
+          <label class="option"><input type="radio" id="public" th:attr="data-testid=${PUBLIC_ID}" name="visibility" value="public"><svg aria-hidden="true"><use href="#icon-globe"/></svg><span><strong>Anyone with the link</strong><small>Anyone can view and download. No sign-in required.</small></span></label>
         </fieldset>
         <div class="notice" id="notice"><svg aria-hidden="true"><use href="#icon-clock"/></svg><p id="notice-text"></p></div>
         <hr>
-        <div class="link-row"><input id="link" data-testid="{{URL_ID}}" readonly aria-label="Artifact URL"><button class="button" id="copy" type="button" data-testid="{{COPY_ID}}"><svg aria-hidden="true"><use href="#icon-copy"/></svg><span id="copy-label">Copy link</span></button></div>
+        <div class="link-row"><input id="link" th:attr="data-testid=${URL_ID}" readonly aria-label="Artifact URL"><button class="button" id="copy" type="button" th:attr="data-testid=${COPY_ID}"><svg aria-hidden="true"><use href="#icon-copy"/></svg><span id="copy-label">Copy link</span></button></div>
         <p class="hint" id="link-hint"></p>
         <p class="error" id="error" role="alert"></p>
       </div>
-      <div class="dialog-footer"><span id="feedback" role="status"></span><button class="button" id="cancel" data-testid="{{CANCEL_ID}}" type="button">Cancel</button><button class="button primary" id="save" data-testid="{{SAVE_ID}}" type="submit">Save</button></div>
+      <div class="dialog-footer"><span id="feedback" role="status"></span><button class="button" id="cancel" th:attr="data-testid=${CANCEL_ID}" type="button">Cancel</button><button class="button primary" id="save" th:attr="data-testid=${SAVE_ID}" type="submit">Save</button></div>
     </form>
   </dialog>
   <div class="toast" id="toast" role="status" hidden></div>

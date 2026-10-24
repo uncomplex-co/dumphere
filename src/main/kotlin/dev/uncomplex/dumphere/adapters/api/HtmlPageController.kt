@@ -46,7 +46,7 @@ class HtmlPageController(
 
     private val contentSecurityPolicy =
         listOf(
-            "sandbox allow-scripts",
+            "sandbox allow-scripts allow-same-origin",
             "default-src 'none'",
             "img-src data: https:",
             "style-src ${properties.cspStyleSrc}",
@@ -67,7 +67,7 @@ class HtmlPageController(
         val page = store.readMetadata(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         val canView = access.canView(page, authentication)
         val canManage = access.isMember(authentication)
-        val csrf = if (canManage) (request.getAttribute(CsrfToken::class.java.name) as? CsrfToken)?.token.orEmpty() else ""
+        val csrf = if (canView) (request.getAttribute(CsrfToken::class.java.name) as? CsrfToken)?.token.orEmpty() else ""
         return ResponseEntity
             .status(if (canView) HttpStatus.OK else HttpStatus.FORBIDDEN)
             .cacheControl(CacheControl.noStore())

@@ -7,7 +7,8 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Component
-import org.springframework.web.util.HtmlUtils
+import org.thymeleaf.ITemplateEngine
+import org.thymeleaf.context.Context
 
 object ArtifactViewerIds {
     const val DOWNLOAD = "artifact-download-button"
@@ -21,12 +22,32 @@ object ArtifactViewerIds {
     const val SAVE = "share-save-button"
     const val CANCEL = "share-cancel-button"
     const val CLOSE = "share-close-button"
+    const val COMMENTS = "artifact-comments-button"
+    const val COMMENTS_CLOSE = "comments-close-button"
+    const val COMMENT_ADD = "comments-add-button"
+    const val ELEMENT_SELECTION = "comments-selection-toggle"
+    const val COMMENT_BODY = "comments-body-input"
+    const val COMMENT_POST = "comments-post-button"
+    const val COMMENT_CANCEL = "comments-cancel-button"
+    const val COMMENT_RETRY = "comments-retry-button"
+    const val THREAD_PIN = "comments-thread-pin"
+    const val COMMENT = "artifact-comment"
+    const val THREAD = "artifact-comment-thread"
+    const val THREAD_REPLY = "comments-reply-button"
+    const val START_DISCUSSION = "discussion-add-comment-button"
+    const val TITLE_MENU = "artifact-title-menu-button"
+    const val TITLE_SHARE = "artifact-menu-share-button"
+    const val TITLE_RELOAD = "artifact-menu-reload-button"
+    const val ARTIFACTS = "artifact-library-button"
+    const val ARTIFACTS_CLOSE = "artifact-library-close-button"
+    const val ARTIFACTS_RETRY = "artifact-library-retry-button"
+    const val ARTIFACT_LINK = "artifact-library-link"
 }
 
 @Component
-class ArtifactViewer {
-    private val template = requireNotNull(javaClass.getResource("/templates/artifact-viewer.html")).readText()
-
+class ArtifactViewer(
+    private val templates: ITemplateEngine,
+) {
     fun render(
         page: PublishedPage?,
         authentication: Authentication?,
@@ -57,17 +78,13 @@ class ArtifactViewer {
                 "VISIBILITY" to (page?.visibility?.value ?: "internal"),
                 "PUBLIC_UNTIL" to (page?.publicUntil?.toString() ?: ""),
                 "VERSION" to (page?.version?.toString() ?: "0"),
-                "CAN_VIEW" to (page != null).toString(),
-                "CAN_MANAGE" to canManage.toString(),
+                "CAN_VIEW" to (page != null),
+                "CAN_MANAGE" to canManage,
                 "NAME" to name,
                 "EMAIL" to (user?.email ?: ""),
                 "INITIALS" to initials,
                 "PICTURE" to picture.orEmpty(),
-                "AVATAR_IMAGE_HIDDEN" to if (picture == null) "hidden" else "",
-                "AVATAR_INITIALS_HIDDEN" to if (picture == null) "" else "hidden",
-                "MANAGEMENT_HIDDEN" to if (canManage) "" else "hidden",
-                "CONTENT_HIDDEN" to if (page == null) "hidden" else "",
-                "BLOCKED_HIDDEN" to if (page == null) "" else "hidden",
+                "HAS_PICTURE" to (picture != null),
                 "CONTENT_URL" to (page?.let { "/p/${it.id}/content" } ?: "about:blank"),
                 "CSRF" to csrf,
                 "DOWNLOAD_ID" to ArtifactViewerIds.DOWNLOAD,
@@ -81,7 +98,28 @@ class ArtifactViewer {
                 "SAVE_ID" to ArtifactViewerIds.SAVE,
                 "CANCEL_ID" to ArtifactViewerIds.CANCEL,
                 "CLOSE_ID" to ArtifactViewerIds.CLOSE,
+                "COMMENTS_ID" to ArtifactViewerIds.COMMENTS,
+                "COMMENTS_CLOSE_ID" to ArtifactViewerIds.COMMENTS_CLOSE,
+                "COMMENT_ADD_ID" to ArtifactViewerIds.COMMENT_ADD,
+                "ELEMENT_SELECTION_ID" to ArtifactViewerIds.ELEMENT_SELECTION,
+                "COMMENT_BODY_ID" to ArtifactViewerIds.COMMENT_BODY,
+                "COMMENT_POST_ID" to ArtifactViewerIds.COMMENT_POST,
+                "COMMENT_CANCEL_ID" to ArtifactViewerIds.COMMENT_CANCEL,
+                "COMMENT_RETRY_ID" to ArtifactViewerIds.COMMENT_RETRY,
+                "THREAD_PIN_ID" to ArtifactViewerIds.THREAD_PIN,
+                "COMMENT_ID" to ArtifactViewerIds.COMMENT,
+                "THREAD_ID" to ArtifactViewerIds.THREAD,
+                "THREAD_REPLY_ID" to ArtifactViewerIds.THREAD_REPLY,
+                "START_DISCUSSION_ID" to ArtifactViewerIds.START_DISCUSSION,
+                "TITLE_MENU_ID" to ArtifactViewerIds.TITLE_MENU,
+                "TITLE_SHARE_ID" to ArtifactViewerIds.TITLE_SHARE,
+                "TITLE_RELOAD_ID" to ArtifactViewerIds.TITLE_RELOAD,
+                "ARTIFACTS_ID" to ArtifactViewerIds.ARTIFACTS,
+                "ARTIFACTS_CLOSE_ID" to ArtifactViewerIds.ARTIFACTS_CLOSE,
+                "ARTIFACTS_RETRY_ID" to ArtifactViewerIds.ARTIFACTS_RETRY,
+                "ARTIFACT_LINK_ID" to ArtifactViewerIds.ARTIFACT_LINK,
             )
-        return Regex("\\{\\{([A-Z_]+)}}").replace(template) { HtmlUtils.htmlEscape(values.getValue(it.groupValues[1])) }
+        val context = Context().apply { setVariables(values) }
+        return templates.process("artifact-viewer", context)
     }
 }

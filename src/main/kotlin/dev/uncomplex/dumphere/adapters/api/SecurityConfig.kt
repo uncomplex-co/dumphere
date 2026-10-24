@@ -80,6 +80,8 @@ class SecurityConfig(
                         matcher("/p/{id}/content"),
                         matcher("/p/{id}/download"),
                         matcher("/p/{id}/status"),
+                        matcher("/p/{id}/comments"),
+                        matcher("/p/{id}/threads/{threadId}/comments"),
                     ).access { authentication, context ->
                         val auth = authentication.get()
                         AuthorizationDecision(
@@ -131,6 +133,12 @@ class SecurityConfig(
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/authorize"))
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/consent"))
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/status"))
+                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments"))
+                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/account/artifacts"))
+                exceptions.defaultAuthenticationEntryPointFor(
+                    HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                    matcher("/p/{id}/threads/{threadId}/comments"),
+                )
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.FORBIDDEN), matcher("/p/{id}/visibility"))
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/p/**"))
             }

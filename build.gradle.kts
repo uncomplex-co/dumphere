@@ -45,6 +45,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-webclient")
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
     implementation("org.springframework.session:spring-session-jdbc")
     implementation("org.springframework.ai:spring-ai-starter-mcp-server-webmvc")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
