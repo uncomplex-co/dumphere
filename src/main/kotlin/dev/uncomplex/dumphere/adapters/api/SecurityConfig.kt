@@ -81,6 +81,7 @@ class SecurityConfig(
                     .requestMatchers(
                         matcher("/p/{id}"),
                         matcher("/p/{id}/content"),
+                        matcher("/p/{id}/wrapper"),
                         matcher("/p/{id}/download"),
                         matcher("/p/{id}/status"),
                         matcher("/p/{id}/comments"),

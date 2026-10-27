@@ -53,4 +53,3 @@ export const checkout = {
 - Never copy product rules into the harness. External-event operations must call the existing application use cases and services; repositories and entities come from `users-lib`, `studios-lib`, and the owning service modules.
 - Reset operations may mutate fixture data directly, but must identify harness-owned records with `test-harness:` markers and must not truncate or rewrite seeded data.
 - User-facing verification still exercises public APIs and UI flows. The harness is setup, side-effect emulation, and assertion support only.
-

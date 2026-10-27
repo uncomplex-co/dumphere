@@ -15,6 +15,7 @@ object ArtifactViewerIds {
     const val SHARE = "artifact-share-button"
     const val AVATAR = "account-avatar"
     const val FRAME = "artifact-content-frame"
+    const val DOCUMENT_FRAME = "artifact-document-frame"
     const val INTERNAL = "share-internal-radio"
     const val PUBLIC = "share-public-radio"
     const val COPY = "share-copy-link-button"
@@ -85,7 +86,7 @@ class ArtifactViewer(
                 "INITIALS" to initials,
                 "PICTURE" to picture.orEmpty(),
                 "HAS_PICTURE" to (picture != null),
-                "CONTENT_URL" to (page?.let { "/p/${it.id}/content" } ?: "about:blank"),
+                "WRAPPER_URL" to (page?.let { "/p/${it.id}/wrapper" } ?: "about:blank"),
                 "CSRF" to csrf,
                 "DOWNLOAD_ID" to ArtifactViewerIds.DOWNLOAD,
                 "SHARE_ID" to ArtifactViewerIds.SHARE,
@@ -121,5 +122,20 @@ class ArtifactViewer(
             )
         val context = Context().apply { setVariables(values) }
         return templates.process("artifact-viewer", context)
+    }
+
+    fun renderWrapper(page: PublishedPage): String {
+        val context =
+            Context().apply {
+                setVariables(
+                    mapOf(
+                        "TITLE" to page.title,
+                        "CONTENT_URL" to "/p/${page.id}/content",
+                        "DOCUMENT_FRAME_ID" to ArtifactViewerIds.DOCUMENT_FRAME,
+                        "THREAD_PIN_ID" to ArtifactViewerIds.THREAD_PIN,
+                    ),
+                )
+            }
+        return templates.process("artifact-wrapper", context)
     }
 }

@@ -58,6 +58,18 @@ class HtmlPageController(
             "frame-ancestors 'self'",
         ).joinToString("; ")
 
+    private val wrapperSecurityPolicy =
+        listOf(
+            "default-src 'none'",
+            "script-src 'self'",
+            "style-src 'self'",
+            "frame-src 'self'",
+            "connect-src 'none'",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "frame-ancestors 'self'",
+        ).joinToString("; ")
+
     @GetMapping("/p/{id}", produces = [MediaType.TEXT_HTML_VALUE])
     fun show(
         @PathVariable id: String,
@@ -74,6 +86,20 @@ class HtmlPageController(
             .header("Content-Security-Policy", viewerSecurityPolicy)
             .header("Referrer-Policy", "no-referrer")
             .body(viewer.render(page.takeIf { canView }, authentication, canManage, csrf))
+    }
+
+    @GetMapping("/p/{id}/wrapper", produces = [MediaType.TEXT_HTML_VALUE])
+    fun wrapper(
+        @PathVariable id: String,
+        authentication: Authentication?,
+    ): ResponseEntity<String> {
+        val page = readable(id, authentication)
+        return ResponseEntity
+            .ok()
+            .cacheControl(CacheControl.noStore())
+            .header("Content-Security-Policy", wrapperSecurityPolicy)
+            .header("Referrer-Policy", "no-referrer")
+            .body(viewer.renderWrapper(page))
     }
 
     @GetMapping("/p/{id}/content")

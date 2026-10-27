@@ -263,7 +263,7 @@
   function updateAttachmentState() {
     for (const item of $('comments-list').querySelectorAll('.comment')) {
       if (!item.dataset.xpath) continue;
-      const found = !!interactions.find(item.dataset.xpath);
+      const found = interactions.isResolved(item.dataset.xpath);
       item.classList.toggle('is-attached', found);
     }
   }
@@ -300,15 +300,10 @@
 
   $('element-selection').addEventListener('click', () => setElementSelection(!interactions.selecting));
   interactions.addEventListener('escape', escapeComments);
-  interactions.addEventListener('artifact-load', () => {
-    // Keep the original XPath if a live update removes the selected element.
-    if (!attachedXpath || $('attached-composer').hidden) return;
-    const target = interactions.find(attachedXpath);
-    if (target) interactions.selected = target;
-    else {
-      $('attached-composer').hidden = true;
-      notify('The selected element is no longer present. Select an element again.');
-    }
+  interactions.addEventListener('attachment-lost', () => {
+    if ($('attached-composer').hidden) return;
+    $('attached-composer').hidden = true;
+    notify('The selected element is no longer present. Select an element again.');
   });
 
   function renderThreads(comments) {
@@ -621,7 +616,7 @@
       publicUntil = artifact.publicUntil;
       canManage = status.canManage;
       if (artifact.live && artifact.version !== version) {
-        $('artifact-frame').src = '/p/' + id + '/content?v=' + artifact.version;
+        $('artifact-frame').src = '/p/' + id + '/wrapper?v=' + artifact.version;
         version = artifact.version;
       }
       render();

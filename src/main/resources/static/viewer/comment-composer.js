@@ -84,6 +84,7 @@ class CommentComposer extends HTMLElement {
     this.cancelButton.disabled = submitting;
     this.input.readOnly = submitting;
     this.postButton.textContent = submitting ? 'Posting...' : this.postLabel;
+    this.dispatchEvent(new Event('composer-statechange', { bubbles: true }));
   }
 
   resizeInput() {

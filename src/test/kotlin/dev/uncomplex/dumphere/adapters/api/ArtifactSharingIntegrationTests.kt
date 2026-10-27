@@ -913,6 +913,48 @@ class ArtifactSharingIntegrationTests {
     }
 
     @Test
+    fun `wrapper protects session data and preserves artifact source`() {
+        val raw = "<html><body><h1>Original source marker</h1><script>window.artifactScript = true;</script></body></html>"
+        val id = publish(raw, "<script>Title</script>")
+        setVisibility(id, "public")
+
+        val shell =
+            mvc
+                .perform(get("/p/$id"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        assertFalse(shell.contains("Original source marker"))
+
+        val response =
+            mvc
+                .perform(get("/p/$id/wrapper"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response
+        val wrapper = response.contentAsString
+        assertContains(wrapper, "&lt;script&gt;Title&lt;/script&gt;")
+        assertFalse(wrapper.contains("Original source marker"))
+        assertFalse(wrapper.contains("data-csrf"))
+        assertFalse(wrapper.contains("comment-composer"))
+        assertEquals("no-store", response.getHeader("Cache-Control"))
+        for (representation in listOf("content", "download")) {
+            assertEquals(
+                raw,
+                mvc
+                    .perform(get("/p/$id/$representation"))
+                    .andExpect(status().isOk)
+                    .andReturn()
+                    .response.contentAsString,
+            )
+        }
+        setVisibility(id, "internal")
+        mvc.perform(get("/p/$id/wrapper").with(member())).andExpect(status().isOk)
+        mvc.perform(get("/p/$id/wrapper").with(member("outsider@outside.test"))).andExpect(status().isForbidden)
+        mvc.perform(get("/p/$id/wrapper")).andExpect(status().isFound)
+    }
+
+    @Test
     fun `comments record the viewed version rather than the latest artifact version`() {
         val id = publish("<h1>Original</h1>")
         mvc
@@ -948,7 +990,7 @@ class ArtifactSharingIntegrationTests {
     }
 
     private fun assertInternalRequiresLogin(id: String) {
-        for (path in listOf("", "/content", "/download")) {
+        for (path in listOf("", "/wrapper", "/content", "/download")) {
             val response =
                 mvc
                     .perform(get("/p/$id$path"))

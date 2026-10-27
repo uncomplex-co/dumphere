@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${TITLE}">Artifact</title>
+  <link rel="stylesheet" href="/viewer/artifact-wrapper.css">
+  <script src="/viewer/artifact-messages.js" defer></script>
+  <script src="/viewer/artifact-dom-interactions.js" defer></script>
+  <script src="/viewer/artifact-wrapper.js" defer></script>
+</head>
+<body>
+  <iframe id="artifact-document" th:attr="data-testid=${DOCUMENT_FRAME_ID}" th:title="${TITLE}" th:src="${CONTENT_URL}" sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer"></iframe>
+  <div class="artifact-annotations" id="artifact-annotations" th:attr="data-pin-testid=${THREAD_PIN_ID}" hidden>
+    <div class="element-highlight" id="element-highlight" hidden></div>
+    <div id="thread-pins"></div>
+  </div>
+</body>
+</html>
