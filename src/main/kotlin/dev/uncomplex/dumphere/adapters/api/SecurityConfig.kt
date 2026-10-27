@@ -7,6 +7,7 @@ import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.authenticatedUser
 import jakarta.servlet.http.HttpServletRequest
+import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
@@ -45,6 +46,8 @@ class SecurityConfig(
     private val artifactAccess: ArtifactAccess,
     private val pages: HtmlPageStore,
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     @Bean
     @Order(1)
     fun apiSecurityFilterChain(http: HttpSecurity): SecurityFilterChain {
@@ -157,7 +160,9 @@ class SecurityConfig(
 
             authentication.authenticatedUser()?.let { userProvisioning.provision(it) }
 
-            response.sendRedirect(RedirectUrlSupport.take(request.getSession(false), request.getParameter("state")) ?: "/login/success")
+            val redirectUrl = RedirectUrlSupport.take(request.getSession(false), request.getParameter("state"))
+            logger.info("Browser login completed: returnUrlPresent={}", redirectUrl != null)
+            response.sendRedirect(redirectUrl ?: "/login/success")
         }
     }
 
@@ -212,6 +217,7 @@ class SecurityConfig(
         val resolvedRequest = authorizationRequest ?: return null
 
         val redirectUrl = RedirectUrlSupport.sanitize(request.getParameter("redirectUrl"))
+        logger.info("Browser login started: returnUrlPresent={}", redirectUrl != null)
         if (redirectUrl == null) return resolvedRequest
 
         val stateId = RedirectUrlSupport.newStateId()

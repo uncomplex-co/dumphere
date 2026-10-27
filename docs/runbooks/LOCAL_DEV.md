@@ -17,6 +17,8 @@ login, and a Streamable HTTP MCP server. There is no separate frontend build.
 | PostgreSQL 17 | `localhost:7332`, database/user/password: `htmlshare` |
 | Local profile | `src/main/resources/application-local_dev.properties` |
 | Database container | Root `compose.yml`, service `postgres` |
+| Local Grafana (LGTM) | `http://localhost:7333` |
+| Local OTLP HTTP collector | `http://localhost:4318` |
 
 Use the **`local_dev`** Spring profile for local development.
 
@@ -37,7 +39,7 @@ docker compose version
 mise run start
 ```
 
-This activates `local_dev`, starts PostgreSQL through `compose.yml`, applies
+This activates `local_dev`, starts PostgreSQL and LGTM through `compose.yml`, applies
 Flyway migrations, and starts the app on port 7331. Keep it running in a dedicated
 terminal or managed background process. Wait for application startup to complete.
 
@@ -63,6 +65,32 @@ Set these overrides before starting the app:
 export SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID='<client-id>'
 export SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET='<client-secret>'
 ```
+
+### Local telemetry and auth troubleshooting
+
+`local_dev` exports application logs, HTTP traces (100% sampling), and
+Micrometer metrics to the pinned `grafana/otel-lgtm` container. Ports are bound to
+loopback only, and data persists in the `htmlshare-lgtm` Docker volume. This is
+development infrastructure, not a production deployment. Normal profiles and
+automated tests do not export telemetry by default.
+
+Open `http://localhost:7333` and use Grafana Explore. The image's default local
+login is `admin` / `admin`. Select Loki for logs, Tempo for traces, or Prometheus
+for metrics. Filter logs with `{service_name="htmlshare"}`. Auth events report
+`returnUrlPresent` and request method/path/status, never cookies, OAuth codes,
+state values, tokens, query strings, or request bodies. Trace IDs connect request
+logs to traces. Do not enable blanket Spring Security TRACE logging or HTTP wire
+logging, which can expose credentials.
+
+Start just the backend manually with `docker compose up -d lgtm`. In IntelliJ,
+keep using `local_dev` and restart the app after dependency changes.
+
+For a logged-out MCP regression, use a separate browser profile, then start MCP
+authorization with `scope=openid+email+profile`. Complete Google sign-in and
+verify the **Approve MCP access** page appears before an authorization code is
+issued. The nested return URL must preserve literal plus signs and existing
+percent escapes. Avoid clearing all browser cookies or all Spring sessions to
+reproduce this: isolate the browser profile instead.
 
 ## 3. Verify readiness
 
@@ -160,6 +188,28 @@ Google login, and consent flow. `/mcp` expects a bearer token, not REST Basic au
 Discovery is available at `/.well-known/oauth-authorization-server` and
 `/.well-known/oauth-protected-resource`.
 
+MCP access tokens last **1 hour**. Refresh tokens last **30 days** and rotate on
+each successful refresh, starting a new 30-day window. PostgreSQL stores only
+SHA-256 refresh-token hashes and their user/client/expiry metadata in
+`mcp_refresh_tokens`. Rotation consumes the old hash and inserts the new hash in
+one transaction, so only one concurrent refresh succeeds. Backend restarts do
+not lose refresh tokens. Tokens issued before migration V18 were memory-only
+and require a one-time reauthorization after restart.
+
+Every refresh token belongs to an existing `users` row through a non-null
+`user_id` foreign key. Issuance rejects identities absent from `users`, deleting
+a user cascades to their refresh tokens, and refresh reads current profile
+claims from that user row. Migration V20 backfills matching legacy tokens and
+revokes orphaned tokens rather than creating users from credentials.
+
+Authorization codes remain single-use, memory-only, and valid for two minutes.
+Migration V19 persists the RSA signing key in `mcp_signing_keys`. All backend
+instances reuse it, so access tokens remain valid across restarts. Only public
+key material is served by `/oauth2/jwks`. Treat the database and its backups as
+secret-bearing infrastructure: the private signing key must remain recoverable
+to sign tokens and is not hashed. Restrict database access and encrypt storage
+and backups. Do not delete or replace the signing key during routine deployment.
+
 After authorization, initialize and list tools. Expect `publish_html`,
 `read_file_contents`, `update_html`, `edit_file_contents`, and
 `enable_live_reload`, plus `get_artifact_metadata` and `set_artifact_visibility`.
@@ -176,8 +226,9 @@ status codes.
 ./gradlew spotlessCheck
 ```
 
-Unit/context tests use H2. Artifact sharing and MCP lifecycle integration tests
-use a disposable PostgreSQL 17 Testcontainers database with Flyway migrations;
+Unit tests run without an application context. Application-context, artifact
+sharing, and MCP lifecycle tests use disposable PostgreSQL 17 Testcontainers
+databases with Flyway migrations;
 Docker is required. Tests do **not** replace normal `local_dev` startup with
 PostgreSQL, real Google login, or a successful persisted publish/update flow.
 Report what was actually verified.

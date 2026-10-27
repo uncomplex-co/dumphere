@@ -2,6 +2,7 @@ package dev.uncomplex.dumphere.adapters.mcp
 
 import dev.uncomplex.dumphere.application.AuthenticatedUser
 import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
+import dev.uncomplex.dumphere.ports.UserRepository
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -14,6 +15,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.io.Serializable
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -50,13 +52,6 @@ private data class AuthorizationCodeGrant(
     val expiresAt: Instant,
 )
 
-private data class RefreshTokenGrant(
-    val user: AuthenticatedUser,
-    val clientId: String,
-    val scopes: Set<String>,
-    val expiresAt: Instant,
-)
-
 class OAuthRequestException(
     val error: String,
     override val message: String,
@@ -75,13 +70,14 @@ class McpOAuthService(
     private val passwordEncoder: PasswordEncoder,
     private val jwtEncoder: JwtEncoder,
     private val properties: DumpHereApplicationProperties,
+    private val refreshTokens: JdbcMcpRefreshTokens,
+    private val users: UserRepository,
 ) {
     private val grants = ConcurrentHashMap<String, AuthorizationCodeGrant>()
-    private val refreshTokens = ConcurrentHashMap<String, RefreshTokenGrant>()
     private val secureRandom = SecureRandom()
     private val codeLifetime = Duration.ofMinutes(2)
-    private val tokenLifetime = Duration.ofMinutes(5)
-    private val refreshTokenLifetime = Duration.ofHours(24)
+    private val tokenLifetime = Duration.ofHours(1)
+    private val refreshTokenLifetime = Duration.ofDays(30)
 
     fun validateAuthorizationRequest(
         responseType: String?,
@@ -151,6 +147,7 @@ class McpOAuthService(
         return code
     }
 
+    @Transactional
     fun exchangeAuthorizationCode(
         code: String?,
         redirectUri: String?,
@@ -179,6 +176,8 @@ class McpOAuthService(
             throw OAuthTokenException("invalid_grant", "code_verifier does not match code_challenge")
         }
 
+        val user = users.findBySubject(stored.user.subject)
+            ?: throw OAuthTokenException("invalid_grant", "User no longer exists")
         val now = Instant.now()
         val token =
             jwtEncoder.encode(
@@ -187,30 +186,33 @@ class McpOAuthService(
                     JwtClaimsSet
                         .builder()
                         .issuer(properties.publicBaseUrl.trimEnd('/'))
-                        .subject(stored.user.subject)
+                        .subject(user.subject)
                         .audience(listOf("${properties.publicBaseUrl.trimEnd('/')}/mcp"))
                         .issuedAt(now)
                         .expiresAt(now.plus(tokenLifetime))
                         .claim("client_id", client.clientId)
                         .claims { claims ->
-                            stored.user.email?.let { claims["email"] = it }
-                            stored.user.displayName?.let { claims["name"] = it }
+                            user.email?.let { claims["email"] = it }
+                            user.displayName?.let { claims["name"] = it }
                         }.build(),
                 ),
             )
 
         val refreshToken = randomToken(32)
-        refreshTokens[refreshToken] =
-            RefreshTokenGrant(
-                user = stored.user,
+        refreshTokens.save(
+            refreshToken,
+            McpRefreshTokenGrant(
+                userId = requireNotNull(user.id),
                 clientId = client.clientId,
                 scopes = stored.request.requestedScopes,
                 expiresAt = now.plus(refreshTokenLifetime),
-            )
+            ),
+        )
 
         return McpTokenResult(token.tokenValue, tokenLifetime.seconds, refreshToken)
     }
 
+    @Transactional
     fun exchangeRefreshToken(
         refreshToken: String?,
         authorizationHeader: String?,
@@ -219,17 +221,12 @@ class McpOAuthService(
     ): McpTokenResult {
         pruneExpiredGrants()
         val tokenValue = refreshToken?.takeIf { it.isNotBlank() } ?: throw OAuthTokenException("invalid_request", "Missing refresh_token")
-        val stored = refreshTokens.remove(tokenValue) ?: throw OAuthTokenException("invalid_grant", "Refresh token is invalid or expired")
-        if (stored.expiresAt.isBefore(Instant.now())) {
-            throw OAuthTokenException("invalid_grant", "Refresh token has expired")
-        }
-
         val client = authenticateClient(authorizationHeader, clientIdParam, clientSecretParam)
-        if (client.clientId != stored.clientId) {
-            throw OAuthTokenException("invalid_grant", "Refresh token was not issued to this client")
-        }
-
         val now = Instant.now()
+        val stored =
+            refreshTokens.consume(tokenValue, client.clientId, now)
+                ?: throw OAuthTokenException("invalid_grant", "Refresh token is invalid or expired")
+        val user = users.findById(stored.userId).orElseThrow { OAuthTokenException("invalid_grant", "User no longer exists") }
         val token =
             jwtEncoder.encode(
                 JwtEncoderParameters.from(
@@ -237,26 +234,28 @@ class McpOAuthService(
                     JwtClaimsSet
                         .builder()
                         .issuer(properties.publicBaseUrl.trimEnd('/'))
-                        .subject(stored.user.subject)
+                        .subject(user.subject)
                         .audience(listOf("${properties.publicBaseUrl.trimEnd('/')}/mcp"))
                         .issuedAt(now)
                         .expiresAt(now.plus(tokenLifetime))
                         .claim("client_id", client.clientId)
                         .claims { claims ->
-                            stored.user.email?.let { claims["email"] = it }
-                            stored.user.displayName?.let { claims["name"] = it }
+                            user.email?.let { claims["email"] = it }
+                            user.displayName?.let { claims["name"] = it }
                         }.build(),
                 ),
             )
 
         val newRefreshToken = randomToken(32)
-        refreshTokens[newRefreshToken] =
-            RefreshTokenGrant(
-                user = stored.user,
+        refreshTokens.save(
+            newRefreshToken,
+            McpRefreshTokenGrant(
+                userId = stored.userId,
                 clientId = client.clientId,
                 scopes = stored.scopes,
                 expiresAt = now.plus(refreshTokenLifetime),
-            )
+            ),
+        )
 
         return McpTokenResult(token.tokenValue, tokenLifetime.seconds, newRefreshToken)
     }
@@ -345,7 +344,7 @@ class McpOAuthService(
     private fun pruneExpiredGrants() {
         val now = Instant.now()
         grants.entries.removeIf { it.value.expiresAt.isBefore(now) }
-        refreshTokens.entries.removeIf { it.value.expiresAt.isBefore(now) }
+        refreshTokens.deleteExpired(now)
     }
 
     private fun randomToken(size: Int): String {

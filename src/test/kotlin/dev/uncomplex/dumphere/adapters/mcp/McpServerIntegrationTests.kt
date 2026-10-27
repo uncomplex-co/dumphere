@@ -1,11 +1,14 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
+import dev.uncomplex.dumphere.testing.PostgresTestDatabase
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.security.oauth2.jwt.JwtClaimsSet
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 import java.net.URI
@@ -16,6 +19,7 @@ import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @SpringBootTest(
@@ -28,6 +32,12 @@ import kotlin.test.assertTrue
     ],
 )
 class McpServerIntegrationTests {
+    companion object {
+        @JvmStatic
+        @DynamicPropertySource
+        fun database(registry: DynamicPropertyRegistry) = PostgresTestDatabase.configure(registry)
+    }
+
     @LocalServerPort
     private var port: Int = 0
 
@@ -36,6 +46,33 @@ class McpServerIntegrationTests {
 
     @Autowired
     private lateinit var mapper: ObjectMapper
+
+    @Test
+    fun publicJwksNeverIncludesPrivateKeyMaterial() {
+        val response =
+            HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:$port/oauth2/jwks")).GET().build(),
+                HttpResponse.BodyHandlers.ofString(),
+            )
+        assertEquals(200, response.statusCode())
+        val keys =
+            mapper
+                .readTree(response.body())
+                .required("keys")
+                .asArray()
+                .values()
+                .toList()
+        assertEquals(1, keys.size)
+        for (key in keys) {
+            assertEquals("RSA", key.path("kty").asString())
+            assertTrue(key.has("kid"))
+            assertTrue(key.has("n"))
+            assertTrue(key.has("e"))
+            for (privateField in listOf("d", "p", "q", "dp", "dq", "qi", "oth")) {
+                assertFalse(key.has(privateField), "Public JWKS must not contain $privateField")
+            }
+        }
+    }
 
     @Test
     fun authenticatesAndListsToolsAndReturnsToolErrors() {

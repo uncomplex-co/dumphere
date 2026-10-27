@@ -57,7 +57,8 @@ class DynamicClientRegistrationController(
                 ).tokenSettings(
                     TokenSettings
                         .builder()
-                        .accessTokenTimeToLive(Duration.ofMinutes(5))
+                        .accessTokenTimeToLive(Duration.ofHours(1))
+                        .refreshTokenTimeToLive(Duration.ofDays(30))
                         .reuseRefreshTokens(false)
                         .build(),
                 ).build()

@@ -1,20 +1,21 @@
 package dev.uncomplex.dumphere.adapters.api
 
 import org.springframework.mock.web.MockHttpServletRequest
+import java.net.URI
+import java.net.URLDecoder
 import kotlin.test.Test
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class RedirectUrlSupportTests {
     @Test
-    fun buildsLoginUrlWithEncodedRedirectUrl() {
-        val loginUrl = RedirectUrlSupport.loginUrl("/oauth2/authorize?client_id=dumphere&state=abc")
-
-        assertTrue(loginUrl.startsWith("/login?redirectUrl="))
-        assertTrue(loginUrl.contains("oauth2"))
-        assertTrue(loginUrl.contains("client_id"))
-        assertTrue(loginUrl.contains("state"))
+    fun preservesLiteralPlusSignsAndEncodedValuesAcrossBothLoginRedirects() {
+        val target = "/oauth2/authorize?scope=openid+email+profile&state=a%2Bb&redirect_uri=http%3A%2F%2Flocalhost%2Fcallback"
+        for (url in listOf(RedirectUrlSupport.loginUrl(target), RedirectUrlSupport.googleAuthorizationUrl(target))) {
+            val decoded = URLDecoder.decode(URI.create(url).rawQuery.substringAfter("redirectUrl="), Charsets.UTF_8)
+            assertEquals(target, decoded)
+            assertEquals(target, RedirectUrlSupport.sanitize(decoded))
+        }
     }
 
     @Test

@@ -45,5 +45,5 @@ class OAuthMetadataController(
     fun openidConfiguration(): Map<String, Any> = authorizationServerMetadata()
 
     @GetMapping("/oauth2/jwks")
-    fun jwks(): Map<String, Any> = jwkSet.toJSONObject()
+    fun jwks(): Map<String, Any> = jwkSet.toPublicJWKSet().toJSONObject()
 }

@@ -10,8 +10,7 @@ object RedirectUrlSupport {
     private const val REDIRECT_URL_PARAMETER = "redirectUrl"
     private const val SESSION_PREFIX = "oauth2.redirect-url."
 
-    fun currentRequestUrl(request: HttpServletRequest): String =
-        request.requestURI + request.queryString?.let { "?$it" }.orEmpty()
+    fun currentRequestUrl(request: HttpServletRequest): String = request.requestURI + request.queryString?.let { "?$it" }.orEmpty()
 
     fun sanitize(redirectUrl: String?): String? {
         val candidate = redirectUrl?.trim().orEmpty()
@@ -23,20 +22,25 @@ object RedirectUrlSupport {
         return candidate
     }
 
-    fun loginUrl(redirectUrl: String?): String =
-        buildUrl("/login", redirectUrl)
+    fun loginUrl(redirectUrl: String?): String = buildUrl("/login", redirectUrl)
 
-    fun googleAuthorizationUrl(redirectUrl: String?): String =
-        buildUrl("/oauth2/authorization/google", redirectUrl)
+    fun googleAuthorizationUrl(redirectUrl: String?): String = buildUrl("/oauth2/authorization/google", redirectUrl)
 
     fun newStateId(): String = UUID.randomUUID().toString()
 
-    fun remember(session: HttpSession, stateId: String, redirectUrl: String?) {
+    fun remember(
+        session: HttpSession,
+        stateId: String,
+        redirectUrl: String?,
+    ) {
         val sanitizedRedirectUrl = sanitize(redirectUrl) ?: return
         session.setAttribute(sessionKey(stateId), sanitizedRedirectUrl)
     }
 
-    fun take(session: HttpSession?, stateId: String?): String? {
+    fun take(
+        session: HttpSession?,
+        stateId: String?,
+    ): String? {
         if (session == null || stateId.isNullOrBlank()) return null
 
         val key = sessionKey(stateId)
@@ -45,9 +49,17 @@ object RedirectUrlSupport {
         return sanitize(redirectUrl)
     }
 
-    private fun buildUrl(path: String, redirectUrl: String?): String {
+    private fun buildUrl(
+        path: String,
+        redirectUrl: String?,
+    ): String {
         val sanitizedRedirectUrl = sanitize(redirectUrl) ?: return path
-        return UriComponentsBuilder.fromPath(path).queryParam(REDIRECT_URL_PARAMETER, sanitizedRedirectUrl).build().encode().toUriString()
+        return UriComponentsBuilder
+            .fromPath(path)
+            .queryParam(REDIRECT_URL_PARAMETER, "{redirectUrl}")
+            .encode()
+            .buildAndExpand(sanitizedRedirectUrl)
+            .toUriString()
     }
 
     private fun sessionKey(stateId: String) = "$SESSION_PREFIX$stateId"

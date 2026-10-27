@@ -47,19 +47,6 @@ class LoginControllerTests {
     }
 
     @Test
-    fun rendersGoogleLinkWithRedirectUrl() {
-        val loginRequest = MockHttpServletRequest("GET", "/login")
-        val loginResponse = MockHttpServletResponse()
-
-        val body = controller.login(loginRequest, loginResponse, null, "/oauth2/authorize?client_id=dumphere")
-
-        assertNotNull(body)
-        assertTrue(body.contains("/oauth2/authorization/google?redirectUrl="))
-        assertTrue(body.contains("oauth2"))
-        assertTrue(body.contains("client_id"))
-    }
-
-    @Test
     fun ignoresUnsafeRedirectUrl() {
         val loginRequest = MockHttpServletRequest("GET", "/login")
         val loginResponse = MockHttpServletResponse()

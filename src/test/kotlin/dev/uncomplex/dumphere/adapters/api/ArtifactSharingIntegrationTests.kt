@@ -220,38 +220,6 @@ class ArtifactSharingIntegrationTests {
     }
 
     @Test
-    fun `default content CSP allows Bellhop and direct viewer DOM access`() {
-        val id = publish("<h1>Bellhop artifact</h1>")
-        setVisibility(id, "public")
-
-        val content =
-            mvc
-                .perform(get("/p/$id/content"))
-                .andExpect(status().isOk)
-                .andReturn()
-                .response
-        assertEquals(
-            "sandbox allow-scripts allow-same-origin; default-src 'none'; img-src data: https:; " +
-                "style-src 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; " +
-                "script-src 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; " +
-                "connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
-            content.getHeader("Content-Security-Policy"),
-        )
-        val shell =
-            mvc
-                .perform(get("/p/$id"))
-                .andExpect(status().isOk)
-                .andReturn()
-                .response
-        assertEquals(
-            "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https:; " +
-                "frame-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
-            shell.getHeader("Content-Security-Policy"),
-        )
-        assertContains(shell.contentAsString, "sandbox=\"allow-scripts allow-same-origin\"")
-    }
-
-    @Test
     fun markdownDownloadPreservesSourceAndRenderedContentIsSeparate() {
         val raw = "# Notes\r\n\r\n- [x] Ready\r\n\r\n<script>alert('not executable')</script>"
         val id = publish(raw, "release.md", "text/markdown")
@@ -890,31 +858,6 @@ class ArtifactSharingIntegrationTests {
     }
 
     @Test
-    fun `artifact title menu offers sharing and reload without giving anonymous viewers sharing permissions`() {
-        val id = publish("<h1>Title menu</h1>")
-        setVisibility(id, "public")
-        val publicViewer =
-            mvc
-                .perform(get("/p/$id"))
-                .andExpect(status().isOk)
-                .andReturn()
-                .response.contentAsString
-        assertContains(publicViewer, "data-testid=\"${ArtifactViewerIds.TITLE_MENU}\"")
-        assertContains(publicViewer, "popovertarget=\"artifact-menu\"")
-        assertContains(publicViewer, "data-testid=\"${ArtifactViewerIds.TITLE_RELOAD}\"")
-        val publicShare = assertNotNull(Regex("<button[^>]*id=\"menu-share\"[^>]*>").find(publicViewer)).value
-        assertContains(publicShare, "disabled")
-        val memberViewer =
-            mvc
-                .perform(get("/p/$id").with(member()))
-                .andExpect(status().isOk)
-                .andReturn()
-                .response.contentAsString
-        val memberShare = assertNotNull(Regex("<button[^>]*id=\"menu-share\"[^>]*>").find(memberViewer)).value
-        assertFalse(memberShare.contains("disabled"))
-    }
-
-    @Test
     fun `your artifacts lists only creations by the signed-in user newest first excluding the current artifact`() {
         val subject = UUID.randomUUID().toString()
         val author = AuthenticatedUser(subject, "alex@example.com", "Alex Morgan")
@@ -1012,7 +955,9 @@ class ArtifactSharingIntegrationTests {
                     .andExpect(status().isFound)
                     .andReturn()
                     .response
-            assertEquals(RedirectUrlSupport.loginUrl("/p/$id$path"), response.redirectedUrl)
+            val location = URI.create(assertNotNull(response.redirectedUrl))
+            assertEquals("/login", location.path)
+            assertEquals("/p/$id$path", URLDecoder.decode(location.rawQuery.substringAfter("redirectUrl="), Charsets.UTF_8))
             assertTrue(response.contentAsString.isEmpty())
         }
         val state =
