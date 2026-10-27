@@ -85,6 +85,7 @@ class SecurityConfig(
                         matcher("/p/{id}/download"),
                         matcher("/p/{id}/status"),
                         matcher("/p/{id}/comments"),
+                        matcher("/p/{id}/comments/{commentId}"),
                         matcher("/p/{id}/threads/{threadId}/comments"),
                     ).access { authentication, context ->
                         val auth = authentication.get()
@@ -138,6 +139,7 @@ class SecurityConfig(
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/consent"))
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/status"))
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments"))
+                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments/{commentId}"))
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/account/artifacts"))
                 exceptions.defaultAuthenticationEntryPointFor(
                     HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),

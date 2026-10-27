@@ -83,7 +83,7 @@ class CommentComposer extends HTMLElement {
     this.postButton.disabled = submitting || !this.input.value.trim();
     this.cancelButton.disabled = submitting;
     this.input.readOnly = submitting;
-    this.postButton.textContent = submitting ? 'Posting...' : this.postLabel;
+    this.postButton.textContent = submitting ? (this.getAttribute('pending-label') || 'Posting...') : this.postLabel;
     this.dispatchEvent(new Event('composer-statechange', { bubbles: true }));
   }
 

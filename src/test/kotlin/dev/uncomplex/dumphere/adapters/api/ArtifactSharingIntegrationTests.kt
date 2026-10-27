@@ -17,6 +17,8 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import tools.jackson.databind.ObjectMapper
@@ -1065,6 +1067,164 @@ class ArtifactSharingIntegrationTests {
                 .andReturn()
                 .response
         assertNull(state.redirectedUrl)
+    }
+
+    @Test
+    fun `authors can edit first comments and replies without changing their identity or thread placement`() {
+        val id = publish("<p>Editable discussion</p>")
+        val first = json.readTree(mvc.perform(
+            post("/p/$id/comments").with(member()).with(csrf()).contentType("application/json")
+                .content("""{"body":"Original","version":1,"xpath":"/html/body/p","relativeX":0.25,"relativeY":0.75}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString)
+        val reply = json.readTree(mvc.perform(
+            post("/p/$id/threads/${first.path("threadId").asLong()}/comments").with(member()).with(csrf())
+                .contentType("application/json").content("""{"body":"Original reply","version":1}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString)
+
+        for (comment in listOf(first, reply)) {
+            val commentId = comment.path("id").asLong()
+            val before = jdbc.queryForMap("select * from comments where id = ?", commentId)
+            val edited = json.readTree(mvc.perform(
+                patch("/p/$id/comments/$commentId").with(member()).with(csrf()).contentType("application/json")
+                    .content("""{"body":"  Revised <b>plain text</b>  "}"""),
+            ).andExpect(status().isOk).andReturn().response.contentAsString)
+            assertEquals("Revised <b>plain text</b>", edited.path("body").asString())
+            assertTrue(edited.path("canEdit").asBoolean())
+            assertTrue(Instant.parse(edited.path("editedAt").asString()).isAfter(Instant.parse(comment.path("createdAt").asString())))
+            assertEquals(comment.path("threadNumber"), edited.path("threadNumber"))
+            assertEquals((before["created_at"] as Timestamp).toInstant(), Instant.parse(edited.path("createdAt").asString()))
+            assertEquals("/html/body/p", edited.path("xpath").asString())
+            val after = jdbc.queryForMap("select * from comments where id = ?", commentId)
+            assertEquals("Revised <b>plain text</b>", after["body"])
+            assertNotNull(after["edited_at"])
+            assertEquals(before.filterKeys { it !in setOf("body", "edited_at") }, after.filterKeys { it !in setOf("body", "edited_at") })
+        }
+        val listed = json.readTree(mvc.perform(get("/p/$id/comments").with(member()))
+            .andExpect(status().isOk).andReturn().response.contentAsString)
+        assertTrue(listed.isArray)
+        assertEquals(2, listed.size())
+        for (comment in listed.asArray().values()) {
+            assertEquals("Revised <b>plain text</b>", comment.path("body").asString())
+            assertTrue(comment.path("canEdit").asBoolean())
+            assertTrue(comment.path("editedAt").isString)
+        }
+        assertEquals(1, committedVersion(id))
+        assertEquals("<p>Editable discussion</p>", committedContents(id))
+    }
+
+    @Test
+    fun `editing rejects other authors anonymous comments missing CSRF invalid bodies and mismatched artifacts`() {
+        val id = publish("<p>Ownership</p>")
+        val otherId = publish("<p>Other artifact</p>")
+        setVisibility(id, "public")
+        val own = json.readTree(mvc.perform(
+            post("/p/$id/comments").with(member()).with(csrf()).contentType("application/json")
+                .content("""{"body":"Mine","version":1}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString)
+        val anonymous = json.readTree(mvc.perform(
+            post("/p/$id/comments").with(csrf()).contentType("application/json")
+                .content("""{"body":"Anonymous","version":1}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString)
+        val commentId = own.path("id").asLong()
+        val before = jdbc.queryForList("select * from comments where id in (?, ?) order by id", commentId, anonymous.path("id").asLong())
+        fun request(artifactId: String = id, target: Long = commentId, body: String = "Changed") =
+            patch("/p/$artifactId/comments/$target").contentType("application/json")
+                .content(json.writeValueAsString(mapOf("body" to body)))
+
+        mvc.perform(request().with(member(subject = "not-the-author")).with(csrf())).andExpect(status().isForbidden)
+        mvc.perform(request().with(csrf())).andExpect(status().isForbidden)
+        mvc.perform(request().with(member())).andExpect(status().isForbidden)
+        mvc.perform(request(target = anonymous.path("id").asLong()).with(member()).with(csrf())).andExpect(status().isForbidden)
+        mvc.perform(request(artifactId = otherId).with(member()).with(csrf())).andExpect(status().isNotFound)
+        mvc.perform(request(target = Long.MAX_VALUE).with(member()).with(csrf())).andExpect(status().isNotFound)
+        for (body in listOf("   ", "x".repeat(10001))) {
+            mvc.perform(request(body = body).with(member()).with(csrf())).andExpect(status().isBadRequest)
+        }
+        for (viewer in listOf(member(), member(subject = "not-the-author"))) {
+            val listed = json.readTree(mvc.perform(get("/p/$id/comments").with(viewer))
+                .andExpect(status().isOk).andReturn().response.contentAsString)
+            assertTrue(listed.isArray)
+            assertEquals(2, listed.size())
+            val anonymousRow = listed.asArray().values().single { it.path("id").asLong() == anonymous.path("id").asLong() }
+            assertFalse(anonymousRow.path("canEdit").asBoolean())
+        }
+        val others = json.readTree(mvc.perform(get("/p/$id/comments").with(member(subject = "not-the-author")))
+            .andExpect(status().isOk).andReturn().response.contentAsString)
+        assertTrue(others.isArray)
+        assertTrue(others.asArray().values().all { !it.path("canEdit").asBoolean() })
+        assertEquals(before, jdbc.queryForList("select * from comments where id in (?, ?) order by id", commentId, anonymous.path("id").asLong()))
+    }
+
+    @Test
+    fun `deleting a reply hides only that reply and deleting the root hides the whole thread while preserving database rows`() {
+        val id = publish("<p>Soft deletion</p>")
+        val first = json.readTree(mvc.perform(
+            post("/p/$id/comments").with(member()).with(csrf()).contentType("application/json")
+                .content("""{"body":"Root","version":1,"xpath":"/html/body/p","relativeX":0.5,"relativeY":0.5}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString)
+        val threadId = first.path("threadId").asLong()
+        fun reply(body: String, subject: String) = json.readTree(mvc.perform(
+            post("/p/$id/threads/$threadId/comments").with(member(subject = subject)).with(csrf())
+                .contentType("application/json").content(json.writeValueAsString(mapOf("body" to body, "version" to 1))),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString)
+        val ownReply = reply("My reply", "different-team-member")
+        val othersReply = reply("Someone else's reply", "another-author")
+
+        mvc.perform(delete("/p/$id/comments/${ownReply.path("id").asLong()}").with(member()).with(csrf()))
+            .andExpect(status().isNoContent)
+        val listed = json.readTree(mvc.perform(get("/p/$id/comments").with(member()))
+            .andExpect(status().isOk).andReturn().response.contentAsString)
+        assertTrue(listed.isArray)
+        assertEquals(listOf("Root", "Someone else's reply"), listed.asArray().values().map { it.path("body").asString() })
+        val deletedReply = jdbc.queryForMap("select * from comments where id = ?", ownReply.path("id").asLong())
+        assertEquals("My reply", deletedReply["body"])
+        assertNotNull(deletedReply["deleted_at"])
+
+        mvc.perform(patch("/p/$id/comments/${ownReply.path("id").asLong()}").with(member()).with(csrf())
+            .contentType("application/json").content("""{"body":"Do not resurrect"}""")).andExpect(status().isNotFound)
+        mvc.perform(delete("/p/$id/comments/${first.path("id").asLong()}").with(member()).with(csrf()))
+            .andExpect(status().isNoContent)
+        val empty = json.readTree(mvc.perform(get("/p/$id/comments").with(member()))
+            .andExpect(status().isOk).andReturn().response.contentAsString)
+        assertTrue(empty.isArray)
+        assertEquals(0, empty.size())
+        assertNotNull(jdbc.queryForObject("select deleted_at from comment_threads where id = ?", Timestamp::class.java, threadId))
+        assertEquals(3, jdbc.queryForObject("select count(*) from comments where thread_id = ? and deleted_at is not null", Int::class.java, threadId))
+        assertEquals("Someone else's reply", jdbc.queryForObject("select body from comments where id = ?", String::class.java, othersReply.path("id").asLong()))
+        assertEquals(deletedReply, jdbc.queryForMap("select * from comments where id = ?", ownReply.path("id").asLong()))
+        mvc.perform(post("/p/$id/threads/$threadId/comments").with(member()).with(csrf())
+            .contentType("application/json").content("""{"body":"No replies to deleted threads","version":1}"""))
+            .andExpect(status().isNotFound)
+        mvc.perform(delete("/p/$id/comments/${first.path("id").asLong()}").with(member()).with(csrf()))
+            .andExpect(status().isNotFound)
+        val next = json.readTree(mvc.perform(post("/p/$id/comments").with(member()).with(csrf())
+            .contentType("application/json").content("""{"body":"Next thread","version":1}"""))
+            .andExpect(status().isCreated).andReturn().response.contentAsString)
+        assertEquals(2, next.path("threadNumber").asInt())
+        assertEquals("<p>Soft deletion</p>", committedContents(id))
+        assertEquals(1, committedVersion(id))
+    }
+
+    @Test
+    fun `deletion rejects non-authors anonymous comments missing CSRF and mismatched artifacts`() {
+        val id = publish("<p>Deletion ownership</p>")
+        val otherId = publish("<p>Other</p>")
+        setVisibility(id, "public")
+        val first = json.readTree(mvc.perform(post("/p/$id/comments").with(member()).with(csrf())
+            .contentType("application/json").content("""{"body":"Owned","version":1}"""))
+            .andExpect(status().isCreated).andReturn().response.contentAsString)
+        val anonymous = json.readTree(mvc.perform(post("/p/$id/comments").with(csrf())
+            .contentType("application/json").content("""{"body":"Anonymous","version":1}"""))
+            .andExpect(status().isCreated).andReturn().response.contentAsString)
+        val before = jdbc.queryForList("select * from comments c join comment_threads t on t.id = c.thread_id where t.artifact_id = ? order by c.id", id)
+        val target = first.path("id").asLong()
+        mvc.perform(delete("/p/$id/comments/$target").with(member(subject = "another-author")).with(csrf())).andExpect(status().isForbidden)
+        mvc.perform(delete("/p/$id/comments/$target").with(csrf())).andExpect(status().isForbidden)
+        mvc.perform(delete("/p/$id/comments/$target").with(member())).andExpect(status().isForbidden)
+        mvc.perform(delete("/p/$id/comments/${anonymous.path("id").asLong()}").with(member()).with(csrf())).andExpect(status().isForbidden)
+        mvc.perform(delete("/p/$otherId/comments/$target").with(member()).with(csrf())).andExpect(status().isNotFound)
+        mvc.perform(delete("/p/$id/comments/${Long.MAX_VALUE}").with(member()).with(csrf())).andExpect(status().isNotFound)
+        assertEquals(before, jdbc.queryForList("select * from comments c join comment_threads t on t.id = c.thread_id where t.artifact_id = ? order by c.id", id))
     }
 
     private fun member(

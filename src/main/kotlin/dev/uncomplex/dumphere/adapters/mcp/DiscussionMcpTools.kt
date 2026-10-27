@@ -68,7 +68,7 @@ class DiscussionMcpTools(
     private fun requirePage(id: String) = requireNotNull(pages.readMetadata(id)) { "page not found: $id" }
 
     private fun requireThread(id: String, threadId: Long) =
-        requireNotNull(threads.findById(threadId).orElse(null)?.takeIf { it.artifactId == id }) { "thread not found: $threadId" }
+        requireNotNull(threads.findById(threadId).orElse(null)?.takeIf { it.artifactId == id && it.deletedAt == null }) { "thread not found: $threadId" }
 
     private fun currentVersionId(id: String): Long {
         val page = requirePage(id)

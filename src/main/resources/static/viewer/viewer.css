@@ -109,6 +109,23 @@ comment-composer{display:block}
 .comment-author-group{display:flex;align-items:center;gap:7px;min-width:0}
 .comment-thread-number{display:grid;place-items:center;flex-shrink:0;min-width:20px;height:20px;padding:0 4px;border-radius:50%;background:var(--accent);color:#fff;font-size:10px;font-weight:600}
 .comment-body{white-space:pre-wrap;font-size:13px;line-height:1.7;margin:8px 0 0}
+.comment-meta-trailing{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}
+.comment-edited{font-size:10px;color:var(--muted)}
+.comment-menu-trigger{width:28px;height:28px;flex-shrink:0}
+.comment-menu-trigger:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.comment-menu{min-width:140px}
+.comment-edit-composer .comment-form{padding:12px 0 0;border:0}
+.comment-delete-dialog{position:fixed;inset:auto;margin:0;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);padding:20px;border:0;border-radius:10px;background:#292a2dcc;color:#fff;box-shadow:none}
+.comment-delete-dialog::backdrop{background:transparent;backdrop-filter:none}
+.comment-delete-dialog[open]{display:flex;align-items:center;justify-content:center}
+.comment-delete-content{text-align:center;width:100%}
+.comment-delete-content h2{font-size:16px;font-weight:600;margin:0 0 8px}
+.comment-delete-content p{font-size:12px;margin:0 0 12px}
+.comment-delete-content p:empty{display:none}
+.comment-delete-actions{display:flex;justify-content:center;gap:10px}
+.comment-delete-actions .button{border-radius:24px;background:#fff;color:var(--accent);padding:9px 20px;font-weight:600}
+.comment-delete-actions .button:first-child{border-color:var(--accent)}
+#comment-delete-error:not(:empty){margin:12px 0 0}
 .artifact-annotations{position:fixed;pointer-events:none;overflow:hidden;z-index:1}
 .attached-composer{position:absolute;pointer-events:auto;width:320px;max-width:calc(100% - 16px);max-height:calc(100% - 16px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 30px #26242f25;z-index:1}
 .attached-composer .comment-form{border:0}

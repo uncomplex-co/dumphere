@@ -2,6 +2,8 @@ package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.ArtifactComment
 import dev.uncomplex.dumphere.application.ArtifactComments
+import dev.uncomplex.dumphere.application.EditCommentResult
+import dev.uncomplex.dumphere.application.DeleteCommentResult
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.authenticatedUser
 import dev.uncomplex.dumphere.ports.CommentThreadRepository
@@ -12,6 +14,8 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
@@ -33,7 +37,8 @@ class ArtifactCommentsController(
         authentication: Authentication?,
     ): ResponseEntity<List<ArtifactComment>> {
         requireAccess(id, authentication)
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(comments.list(id))
+        val viewer = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(comments.list(id, viewer))
     }
 
     @PostMapping("/p/{id}/comments")
@@ -81,7 +86,7 @@ class ArtifactCommentsController(
         requireAccess(id, authentication)
         val body = validatedBody(request.body)
         val thread =
-            threads.findById(threadId).orElse(null)?.takeIf { it.artifactId == id }
+            threads.findById(threadId).orElse(null)?.takeIf { it.artifactId == id && it.deletedAt == null }
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         val version =
             versions.findByPageIdAndVersion(id, request.version)
@@ -89,6 +94,39 @@ class ArtifactCommentsController(
         val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
         val comment = comments.reply(thread, requireNotNull(version.id), body, author)
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(comment)
+    }
+
+    @PatchMapping("/p/{id}/comments/{commentId}")
+    fun edit(
+        @PathVariable id: String,
+        @PathVariable commentId: Long,
+        @RequestBody request: EditArtifactCommentRequest,
+        authentication: Authentication?,
+    ): ResponseEntity<ArtifactComment> {
+        requireAccess(id, authentication)
+        val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+            ?: throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        return when (val result = comments.edit(id, commentId, validatedBody(request.body), author)) {
+            is EditCommentResult.Updated -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.comment)
+            EditCommentResult.NotFound -> throw ResponseStatusException(HttpStatus.NOT_FOUND)
+            EditCommentResult.Forbidden -> throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        }
+    }
+
+    @DeleteMapping("/p/{id}/comments/{commentId}")
+    fun delete(
+        @PathVariable id: String,
+        @PathVariable commentId: Long,
+        authentication: Authentication?,
+    ): ResponseEntity<Void> {
+        requireAccess(id, authentication)
+        val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+            ?: throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        return when (comments.delete(id, commentId, author)) {
+            DeleteCommentResult.DELETED -> ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build()
+            DeleteCommentResult.NOT_FOUND -> throw ResponseStatusException(HttpStatus.NOT_FOUND)
+            DeleteCommentResult.FORBIDDEN -> throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        }
     }
 
     private fun validatedBody(value: String): String {
@@ -120,3 +158,5 @@ data class ReplyToThreadRequest(
     val body: String,
     val version: Int,
 )
+
+data class EditArtifactCommentRequest(val body: String)

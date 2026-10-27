@@ -33,6 +33,14 @@ object ArtifactViewerIds {
     const val COMMENT_RETRY = "comments-retry-button"
     const val THREAD_PIN = "comments-thread-pin"
     const val COMMENT = "artifact-comment"
+    const val COMMENT_MENU = "comment-menu-button"
+    const val COMMENT_EDIT = "comment-edit-button"
+    const val COMMENT_EDIT_BODY = "comment-edit-body-input"
+    const val COMMENT_EDIT_SAVE = "comment-edit-save-button"
+    const val COMMENT_EDIT_CANCEL = "comment-edit-cancel-button"
+    const val COMMENT_DELETE = "comment-delete-button"
+    const val COMMENT_DELETE_CONFIRM = "comment-delete-confirm-button"
+    const val COMMENT_DELETE_CANCEL = "comment-delete-cancel-button"
     const val THREAD = "artifact-comment-thread"
     const val THREAD_REPLY = "comments-reply-button"
     const val START_DISCUSSION = "discussion-add-comment-button"
@@ -109,6 +117,14 @@ class ArtifactViewer(
                 "COMMENT_RETRY_ID" to ArtifactViewerIds.COMMENT_RETRY,
                 "THREAD_PIN_ID" to ArtifactViewerIds.THREAD_PIN,
                 "COMMENT_ID" to ArtifactViewerIds.COMMENT,
+                "COMMENT_MENU_ID" to ArtifactViewerIds.COMMENT_MENU,
+                "COMMENT_EDIT_ID" to ArtifactViewerIds.COMMENT_EDIT,
+                "COMMENT_EDIT_BODY_ID" to ArtifactViewerIds.COMMENT_EDIT_BODY,
+                "COMMENT_EDIT_SAVE_ID" to ArtifactViewerIds.COMMENT_EDIT_SAVE,
+                "COMMENT_EDIT_CANCEL_ID" to ArtifactViewerIds.COMMENT_EDIT_CANCEL,
+                "COMMENT_DELETE_ID" to ArtifactViewerIds.COMMENT_DELETE,
+                "COMMENT_DELETE_CONFIRM_ID" to ArtifactViewerIds.COMMENT_DELETE_CONFIRM,
+                "COMMENT_DELETE_CANCEL_ID" to ArtifactViewerIds.COMMENT_DELETE_CANCEL,
                 "THREAD_ID" to ArtifactViewerIds.THREAD,
                 "THREAD_REPLY_ID" to ArtifactViewerIds.THREAD_REPLY,
                 "START_DISCUSSION_ID" to ArtifactViewerIds.START_DISCUSSION,

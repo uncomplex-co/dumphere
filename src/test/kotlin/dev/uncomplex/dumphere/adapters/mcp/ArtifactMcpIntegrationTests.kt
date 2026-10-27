@@ -5,12 +5,18 @@ import dev.uncomplex.dumphere.testing.PostgresTestDatabase
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.oauth2.jwt.JwtClaimsSet
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import tools.jackson.databind.ObjectMapper
 import java.sql.Timestamp
 import java.time.Instant
@@ -31,6 +37,7 @@ import kotlin.test.assertTrue
         "htmlshare.allowed-email-domain=example.com",
     ],
 )
+@AutoConfigureMockMvc
 class ArtifactMcpIntegrationTests {
     @LocalServerPort private var port: Int = 0
 
@@ -39,6 +46,7 @@ class ArtifactMcpIntegrationTests {
     @Autowired private lateinit var json: ObjectMapper
 
     @Autowired private lateinit var jdbc: JdbcTemplate
+    @Autowired private lateinit var mvc: MockMvc
 
     companion object {
         @JvmStatic
@@ -207,6 +215,52 @@ class ArtifactMcpIntegrationTests {
             assertEquals(0, jdbc.queryForObject("select count(*) from comment_threads where artifact_id = ?", Int::class.java, otherId))
             assertEquals("<h1>Revised</h1>", contents(id))
             assertEquals(2, jdbc.queryForObject("select current_version from html_pages where id = ?", Int::class.java, id))
+
+            fun editComment(commentId: Long, body: String) = json.readTree(mvc.perform(
+                patch("/p/$id/comments/$commentId").header("Authorization", "Bearer $token").with(csrf())
+                    .contentType("application/json").content(json.writeValueAsString(mapOf("body" to body))),
+            ).andExpect(status().isOk).andReturn().response.contentAsString)
+            val firstEdit = editComment(first.path("id").asLong(), "Updated first topic")
+            val lastEdit = editComment(first.path("id").asLong(), "Final first topic")
+            val editedReply = editComment(reply.path("id").asLong(), "Revised reply")
+            assertTrue(!Instant.parse(lastEdit.path("editedAt").asString()).isBefore(Instant.parse(firstEdit.path("editedAt").asString())))
+            val editedDiscussion = client.metadata(client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread)))
+            assertTrue(editedDiscussion.isArray)
+            assertEquals(3, editedDiscussion.size())
+            assertEquals("Final first topic", editedDiscussion[0].path("body").asString())
+            assertEquals(lastEdit.path("editedAt"), editedDiscussion[0].path("editedAt"))
+            assertEquals("Revised reply", editedDiscussion[1].path("body").asString())
+            assertEquals(editedReply.path("editedAt"), editedDiscussion[1].path("editedAt"))
+            assertTrue(editedDiscussion[2].path("editedAt").isNull)
+            assertEquals(
+                jdbc.queryForObject("select edited_at from comments where id = ?", Timestamp::class.java, first.path("id").asLong())?.toInstant(),
+                Instant.parse(editedDiscussion[0].path("editedAt").asString()),
+            )
+            val editedSummaries = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
+            assertTrue(editedSummaries.isArray)
+            assertEquals("Final first topic", editedSummaries[0].path("firstComment").asString())
+
+            mvc.perform(delete("/p/$id/comments/${followUp.path("id").asLong()}").header("Authorization", "Bearer $token").with(csrf()))
+                .andExpect(status().isNoContent)
+            val afterReplyDeletion = client.metadata(client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread)))
+            assertTrue(afterReplyDeletion.isArray)
+            assertEquals(listOf("Final first topic", "Revised reply"), afterReplyDeletion.asArray().values().map { it.path("body").asString() })
+            val updatedSummaries = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
+            assertTrue(updatedSummaries.isArray)
+            assertEquals(2, updatedSummaries.size())
+            assertEquals(1, updatedSummaries[0].path("replyCount").asInt())
+
+            mvc.perform(delete("/p/$id/comments/${first.path("id").asLong()}").header("Authorization", "Bearer $token").with(csrf()))
+                .andExpect(status().isNoContent)
+            val surviving = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
+            assertTrue(surviving.isArray)
+            assertEquals(1, surviving.size())
+            assertEquals(second.path("threadId"), surviving[0].path("threadId"))
+            client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread), expectError = true)
+            client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to "Cannot resurrect"), expectError = true)
+            assertEquals(3, jdbc.queryForObject("select count(*) from comments where thread_id = ? and deleted_at is not null", Int::class.java, thread))
+            assertNotNull(jdbc.queryForObject("select deleted_at from comment_threads where id = ?", Timestamp::class.java, thread))
+            assertEquals("Final first topic", jdbc.queryForObject("select body from comments where id = ?", String::class.java, first.path("id").asLong()))
         }
     }
 

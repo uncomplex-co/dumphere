@@ -15,6 +15,7 @@ data class CommentThreadEntity(
     val xpath: String? = null,
     val relativeX: Double? = null,
     val relativeY: Double? = null,
+    val deletedAt: Instant? = null,
 )
 
 @Table("comments")
@@ -25,4 +26,6 @@ data class CommentEntity(
     val authorUserId: Long? = null,
     val body: String,
     val createdAt: Instant,
+    val editedAt: Instant? = null,
+    val deletedAt: Instant? = null,
 )

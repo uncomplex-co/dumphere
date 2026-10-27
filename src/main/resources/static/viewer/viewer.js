@@ -79,7 +79,9 @@
   window.addEventListener('blur', () => {
     // Iframe interactions do not bubble to the viewer's popover light-dismiss handler.
     setTimeout(() => {
-      if (document.activeElement === $('artifact-frame') && titleMenu.matches(':popover-open')) titleMenu.hidePopover();
+      if (document.activeElement === $('artifact-frame')) {
+        document.querySelectorAll('.artifact-menu:popover-open').forEach(menu => menu.hidePopover());
+      }
     }, 0);
   });
   let focusLastMenuItem = false;
@@ -238,14 +240,29 @@
     body.textContent = comment.body;
     meta.append(authorGroup, time);
     item.append(meta, body);
+    const edited = document.createElement('span');
+    edited.className = 'comment-edited';
+    edited.textContent = 'Edited';
+    const showEdited = value => {
+      edited.hidden = !value;
+      edited.title = value ? 'Edited ' + new Date(value).toLocaleString() : '';
+    };
+    showEdited(comment.editedAt);
+    const trailing = document.createElement('div');
+    trailing.className = 'comment-meta-trailing';
+    trailing.append(time, edited);
+    meta.append(trailing);
+    if (comment.canEdit) addCommentActions(item, trailing, comment, body, showEdited, firstInThread);
     if (comment.xpath) item.dataset.xpath = comment.xpath;
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
-    item.addEventListener('click', () => {
+    item.addEventListener('click', event => {
+      if (event.target.closest('button, comment-composer, [role="menu"]')) return;
       selectThread(comment.threadId);
       if (comment.xpath) interactions.scrollTo(comment.xpath);
     });
     item.addEventListener('keydown', event => {
+      if (event.target !== item) return;
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         item.click();
@@ -253,6 +270,180 @@
     });
     return item;
   }
+
+  function addCommentActions(item, trailing, comment, body, showEdited, firstInThread) {
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'icon-button comment-menu-trigger';
+    trigger.dataset.testid = initial.commentMenuTestid;
+    trigger.setAttribute('aria-label', 'Comment options');
+    trigger.setAttribute('aria-haspopup', 'menu');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.innerHTML = '<svg aria-hidden="true"><use href="#icon-more"/></svg>';
+    const menu = document.createElement('div');
+    menu.id = 'comment-menu-' + comment.id;
+    menu.className = 'artifact-menu comment-menu';
+    menu.popover = 'auto';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Comment options');
+    trigger.setAttribute('popovertarget', menu.id);
+    trigger.setAttribute('aria-controls', menu.id);
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.setAttribute('role', 'menuitem');
+    edit.dataset.testid = initial.commentEditTestid;
+    edit.innerHTML = '<svg aria-hidden="true"><use href="#icon-edit"/></svg><span>Edit</span>';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.setAttribute('role', 'menuitem');
+    remove.dataset.testid = $('comment-delete-dialog').dataset.actionTestid;
+    remove.innerHTML = '<svg aria-hidden="true"><use href="#icon-delete"/></svg><span>Delete</span>';
+    remove.addEventListener('click', () => {
+      menu.hidePopover();
+      confirmCommentDelete(comment, item, firstInThread, trigger);
+    });
+    menu.append(edit, remove);
+    menu.addEventListener('beforetoggle', event => {
+      if (event.newState !== 'open') return;
+      const bounds = trigger.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(bounds.right - 140, innerWidth - 148)) + 'px';
+      menu.style.top = Math.max(8, Math.min(bounds.bottom + 4, innerHeight - 100)) + 'px';
+    });
+    menu.addEventListener('toggle', event => {
+      const open = event.newState === 'open';
+      trigger.setAttribute('aria-expanded', String(open));
+      if (open) edit.focus();
+    });
+    trigger.addEventListener('keydown', event => {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      menu.showPopover();
+    });
+    menu.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        menu.hidePopover();
+        trigger.focus();
+      } else if (event.key === 'Tab') menu.hidePopover();
+      else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault();
+        const items = [edit, remove];
+        const index = items.indexOf(document.activeElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[next].focus();
+      }
+    });
+    const composer = document.createElement('comment-composer');
+    composer.hidden = true;
+    composer.className = 'comment-edit-composer';
+    composer.setAttribute('label', 'Edit comment');
+    composer.setAttribute('submit-label', 'Save');
+    composer.setAttribute('pending-label', 'Saving...');
+    composer.dataset.bodyTestid = initial.commentEditBodyTestid;
+    composer.dataset.postTestid = initial.commentEditSaveTestid;
+    composer.dataset.cancelTestid = initial.commentEditCancelTestid;
+    edit.addEventListener('click', () => {
+      menu.hidePopover();
+      body.hidden = true;
+      trigger.disabled = true;
+      composer.input.value = comment.body;
+      composer.setSubmitting(false);
+      composer.show();
+    });
+    const finish = () => {
+      composer.complete();
+      body.hidden = false;
+      trigger.disabled = false;
+      trigger.focus();
+    };
+    composer.addEventListener('comment-cancel', finish);
+    composer.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        if (!composer.submitting) finish();
+      }
+    });
+    composer.addEventListener('comment-submit', async event => {
+      if (!canView) return composer.fail('Your access may have changed. Reload the page before editing.');
+      try {
+        const response = await fetch('/p/' + id + '/comments/' + comment.id, {
+          method: 'PATCH', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': initial.csrf },
+          body: JSON.stringify({ body: event.detail.body })
+        });
+        if (!response.ok) throw new Error([401, 403].includes(response.status)
+          ? 'Your access may have changed. Reload the page before editing.' : 'Could not save your comment. Try again.');
+        const updated = await response.json();
+        comment.body = updated.body;
+        body.textContent = updated.body;
+        showEdited(updated.editedAt);
+        finish();
+      } catch (error) {
+        composer.fail(error.message === 'Failed to fetch'
+          ? 'Could not save your comment. Check your connection and try again.' : error.message);
+      }
+    });
+    trailing.append(trigger);
+    item.append(menu, composer);
+  }
+
+  const deleteDialog = $('comment-delete-dialog');
+  let pendingDelete;
+  let deletingComment = false;
+
+  function confirmCommentDelete(comment, item, root, trigger) {
+    pendingDelete = { comment, root, trigger };
+    const bounds = item.closest('.comment-thread').getBoundingClientRect();
+    const height = Math.min(Math.max(bounds.height, 200), innerHeight - 16);
+    Object.assign(deleteDialog.style, {
+      left: Math.max(8, bounds.left) + 'px',
+      top: Math.max(8, Math.min(bounds.top, innerHeight - height - 8)) + 'px',
+      width: Math.min(bounds.width, innerWidth - 16) + 'px', height: height + 'px'
+    });
+    $('comment-delete-title').textContent = root ? 'Delete this comment thread?' : 'Delete this comment?';
+    $('comment-delete-detail').textContent = root ? 'All replies will also be deleted.' : '';
+    $('comment-delete-error').textContent = '';
+    deleteDialog.showModal();
+  }
+
+  deleteDialog.addEventListener('cancel', event => {
+    if (deletingComment) event.preventDefault();
+  });
+  deleteDialog.addEventListener('close', () => {
+    pendingDelete?.trigger?.focus();
+    pendingDelete = null;
+  });
+  $('comment-delete-cancel').addEventListener('click', () => deleteDialog.close());
+  $('comment-delete-confirm').addEventListener('click', async () => {
+    if (deletingComment || !pendingDelete) return;
+    const { comment, root } = pendingDelete;
+    deletingComment = true;
+    $('comment-delete-confirm').disabled = true;
+    $('comment-delete-cancel').disabled = true;
+    $('comment-delete-confirm').textContent = 'Deleting...';
+    $('comment-delete-error').textContent = '';
+    try {
+      const response = await fetch('/p/' + id + '/comments/' + comment.id, {
+        method: 'DELETE', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': initial.csrf }
+      });
+      if (!response.ok) throw new Error([401, 403].includes(response.status)
+        ? 'Your access may have changed. Reload the page before deleting.' : 'Could not delete the comment. Try again.');
+      if (root && selectedThreadId === comment.threadId) selectedThreadId = null;
+      deleteDialog.close();
+      await loadComments();
+      $('comment-add').focus();
+    } catch (error) {
+      $('comment-delete-error').textContent = error.message === 'Failed to fetch'
+        ? 'Could not delete the comment. Check your connection and try again.' : error.message;
+    } finally {
+      deletingComment = false;
+      $('comment-delete-confirm').disabled = false;
+      $('comment-delete-cancel').disabled = false;
+      $('comment-delete-confirm').textContent = 'Delete';
+    }
+  });
 
   function selectThread(threadId) {
     selectedThreadId = threadId;
