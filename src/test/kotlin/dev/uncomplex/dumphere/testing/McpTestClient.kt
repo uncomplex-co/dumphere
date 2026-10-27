@@ -46,6 +46,7 @@ class McpTestClient(
     fun call(
         name: String,
         arguments: Map<String, Any>,
+        expectError: Boolean = false,
     ): JsonNode {
         val response =
             send(
@@ -60,7 +61,7 @@ class McpTestClient(
         val message = payload(response)
         assertFalse(message.has("error"), response.body())
         val result = message.path("result")
-        assertFalse(result.path("isError").asBoolean(), response.body())
+        assertEquals(expectError, result.path("isError").asBoolean(), response.body())
         assertTrue(result.path("content").isArray, response.body())
         return result
     }

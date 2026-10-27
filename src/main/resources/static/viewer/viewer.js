@@ -76,6 +76,12 @@
 
   const titleMenu = $('artifact-menu');
   const titleTrigger = $('title-menu-trigger');
+  window.addEventListener('blur', () => {
+    // Iframe interactions do not bubble to the viewer's popover light-dismiss handler.
+    setTimeout(() => {
+      if (document.activeElement === $('artifact-frame') && titleMenu.matches(':popover-open')) titleMenu.hidePopover();
+    }, 0);
+  });
   let focusLastMenuItem = false;
   titleMenu.addEventListener('beforetoggle', event => {
     if (event.newState !== 'open') return;

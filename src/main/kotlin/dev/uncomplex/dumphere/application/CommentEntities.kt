@@ -8,6 +8,7 @@ import java.time.Instant
 data class CommentThreadEntity(
     @Id val id: Long? = null,
     val artifactId: String,
+    val number: Long,
     val createdInVersionId: Long,
     val createdByUserId: Long? = null,
     val createdAt: Instant,

@@ -143,6 +143,10 @@ class McpServerIntegrationTests {
                 "enable_live_reload",
                 "get_artifact_metadata",
                 "set_artifact_visibility",
+                "list_discussion_threads",
+                "list_thread_comments",
+                "start_discussion_thread",
+                "reply_to_thread",
             ),
             names,
         )

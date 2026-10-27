@@ -28,6 +28,9 @@ import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -695,25 +698,30 @@ class ArtifactSharingIntegrationTests {
     }
 
     @Test
-    fun `threads are ordered by latest comment while messages stay grouped and chronological`() {
+    fun `thread numbers stay stable when replies reorder anchored and document-level discussions`() {
         val id = publish("<h1>Thread ordering</h1>")
         setVisibility(id, "public")
 
-        fun add(body: String) =
+        fun add(body: String, anchored: Boolean = false) =
             json.readTree(
                 mvc
                     .perform(
                         post("/p/$id/comments")
                             .with(csrf())
                             .contentType("application/json")
-                            .content(json.writeValueAsString(mapOf("body" to body, "version" to 1))),
+                            .content(json.writeValueAsString(
+                                mapOf("body" to body, "version" to 1) +
+                                    if (anchored) mapOf("xpath" to "/html/body/h1", "relativeX" to 0.5, "relativeY" to 0.5) else emptyMap(),
+                            )),
                     ).andExpect(status().isCreated)
                     .andReturn()
                     .response.contentAsString,
             )
 
         val older = add("Older thread, first message")
-        val newer = add("Newer thread")
+        val newer = add("Newer thread", anchored = true)
+        assertEquals(1, older.path("threadNumber").asInt())
+        assertEquals(2, newer.path("threadNumber").asInt())
         mvc
             .perform(
                 post("/p/$id/threads/${older.path("threadId").asLong()}/comments")
@@ -732,6 +740,7 @@ class ArtifactSharingIntegrationTests {
             )
         assertTrue(listed.isArray)
         assertEquals(3, listed.size())
+        assertEquals(listOf(1, 1, 2), (0 until listed.size()).map { listed[it].path("threadNumber").asInt() })
         assertEquals(
             listOf("Older thread, first message", "Latest reply to older thread", "Newer thread"),
             (0 until listed.size()).map { listed[it].path("body").asString() },
@@ -749,6 +758,53 @@ class ArtifactSharingIntegrationTests {
                 id,
             ),
         )
+        val third = add("Third thread")
+        assertEquals(3, third.path("threadNumber").asInt())
+        assertEquals(listOf(1L, 2L, 3L), jdbc.queryForList(
+            "select number from comment_threads where artifact_id = ? order by number", Long::class.java, id,
+        ))
+    }
+
+    @Test
+    fun `concurrent threads get unique per-artifact numbers that are not reused after deletion`() {
+        val id = publish("<h1>Concurrent discussions</h1>")
+        val otherId = publish("<h1>Separate numbering</h1>")
+        setVisibility(id, "public")
+        setVisibility(otherId, "public")
+
+        fun add(artifactId: String, body: String) = json.readTree(
+            mvc.perform(
+                post("/p/$artifactId/comments").with(csrf()).contentType("application/json")
+                    .content(json.writeValueAsString(mapOf("body" to body, "version" to 1))),
+            ).andExpect(status().isCreated).andReturn().response.contentAsString,
+        )
+
+        val start = CountDownLatch(1)
+        val created = Executors.newFixedThreadPool(8).use { executor ->
+            val pending = (1..8).map { index ->
+                executor.submit<tools.jackson.databind.JsonNode> {
+                    check(start.await(10, TimeUnit.SECONDS))
+                    add(id, "Discussion $index")
+                }
+            }
+            start.countDown()
+            pending.map { it.get(30, TimeUnit.SECONDS) }
+        }
+        assertEquals((1L..8L).toList(), created.map { it.path("threadNumber").asLong() }.sorted())
+        assertEquals((1L..8L).toList(), jdbc.queryForList(
+            "select number from comment_threads where artifact_id = ? order by number", Long::class.java, id,
+        ))
+        assertEquals(8, jdbc.queryForObject(
+            "select count(*) from comments c join comment_threads t on t.id = c.thread_id where t.artifact_id = ?", Int::class.java, id,
+        ))
+        assertEquals(1, add(otherId, "Independent discussion").path("threadNumber").asInt())
+
+        jdbc.update("delete from comment_threads where artifact_id = ? and number = 8", id)
+        val next = add(id, "Do not reuse the deleted number")
+        assertEquals(9, next.path("threadNumber").asInt())
+        assertEquals(9, jdbc.queryForObject(
+            "select number from comment_threads where id = ?", Int::class.java, next.path("threadId").asLong(),
+        ))
     }
 
     @Test

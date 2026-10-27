@@ -55,6 +55,7 @@ class CommentRepositoriesIntegrationTests {
                         threads.save(
                             CommentThreadEntity(
                                 artifactId = artifactId,
+                                number = 1,
                                 createdInVersionId = assertNotNull(version.id),
                                 createdAt = now,
                                 xpath = "/html/body/div[2]",
@@ -100,6 +101,7 @@ class CommentRepositoriesIntegrationTests {
                         threads.save(
                             CommentThreadEntity(
                                 artifactId = artifactId,
+                                number = 1,
                                 createdInVersionId = assertNotNull(firstVersion.id),
                                 createdByUserId = author.id,
                                 createdAt = now,

@@ -5,6 +5,14 @@ import org.springframework.data.jdbc.repository.query.Query
 import org.springframework.data.repository.CrudRepository
 
 interface HtmlPageRepository : CrudRepository<HtmlPageEntity, String> {
+    @Query(
+        """
+        update html_pages set last_discussion_thread_number = last_discussion_thread_number + 1
+        where id = :id returning last_discussion_thread_number
+        """,
+    )
+    fun allocateDiscussionThreadNumber(id: String): Long?
+
     @Query("select * from html_pages where id = :id for update")
     fun findByIdForUpdate(id: String): HtmlPageEntity?
 

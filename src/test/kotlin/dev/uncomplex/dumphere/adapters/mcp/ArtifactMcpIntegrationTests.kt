@@ -131,6 +131,85 @@ class ArtifactMcpIntegrationTests {
     private fun deadline(id: String) =
         jdbc.queryForObject("select public_until from html_pages where id = ?", Timestamp::class.java, id)?.toInstant()
 
+    @Test
+    fun agentsDiscussArtifactsAcrossVersionsWithoutMixingThreadsOrChangingContent() {
+        val token = jwtEncoder.encode(
+            JwtEncoderParameters.from(
+                JwtClaimsSet.builder().subject("comment-agent").claim("email", "comments@example.com")
+                    .claim("name", "Comment agent").issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(120)).build(),
+            ),
+        ).tokenValue
+        McpTestClient(port, token, json).use { client ->
+            client.initialize()
+            fun publish() = client.metadata(client.call("publish_html", mapOf("contents" to "<h1>Discuss</h1>", "format" to "html")))
+                .path("id").asString()
+            val id = publish()
+            val otherId = publish()
+            val empty = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
+            assertTrue(empty.isArray)
+            assertEquals(0, empty.size())
+
+            val first = client.metadata(client.call("start_discussion_thread", mapOf("id" to id, "body" to "  First topic  ")))
+            val thread = first.path("threadId").asLong()
+            assertTrue(thread > 0)
+            assertEquals("First topic", first.path("body").asString())
+            assertEquals(1, first.path("threadNumber").asInt())
+            assertEquals("First topic", jdbc.queryForObject("select body from comments where id = ?", String::class.java, first.path("id").asLong()))
+            assertEquals("comment-agent", jdbc.queryForObject(
+                "select u.subject from comments c join users u on u.id = c.author_user_id where c.id = ?",
+                String::class.java, first.path("id").asLong(),
+            ))
+            val second = client.metadata(client.call("start_discussion_thread", mapOf("id" to id, "body" to "Other topic")))
+            assertEquals(2, second.path("threadNumber").asInt())
+            client.call("update_html", mapOf("id" to id, "contents" to "<h1>Revised</h1>"))
+            val reply = client.metadata(client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to "Reply on v2")))
+            assertEquals(thread, reply.path("threadId").asLong())
+            assertEquals(1, reply.path("threadNumber").asInt())
+            assertEquals(2, jdbc.queryForObject(
+                "select v.version from comments c join html_page_versions v on v.id = c.created_in_version_id where c.id = ?",
+                Int::class.java, reply.path("id").asLong(),
+            ))
+            val followUp = client.metadata(client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to "Follow-up")))
+            assertEquals(2, jdbc.queryForObject(
+                "select v.version from comments c join html_page_versions v on v.id = c.created_in_version_id where c.id = ?",
+                Int::class.java, followUp.path("id").asLong(),
+            ))
+            val summaries = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
+            assertTrue(summaries.isArray)
+            assertEquals(2, summaries.size())
+            assertEquals(thread, summaries[0].path("threadId").asLong())
+            assertEquals(1, summaries[0].path("threadNumber").asInt())
+            assertEquals(2, summaries[1].path("threadNumber").asInt())
+            assertEquals("First topic", summaries[0].path("firstComment").asString())
+            assertEquals(2, summaries[0].path("replyCount").asInt())
+            assertEquals(second.path("threadId").asLong(), summaries[1].path("threadId").asLong())
+            assertEquals(0, summaries[1].path("replyCount").asInt())
+            val discussion = client.metadata(client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread)))
+            assertTrue(discussion.isArray)
+            assertEquals(listOf(1, 1, 1), discussion.asArray().values().map { it.path("threadNumber").asInt() })
+            assertEquals(listOf("First topic", "Reply on v2", "Follow-up"), discussion.asArray().values().map { it.path("body").asString() })
+
+            for (tool in listOf("list_thread_comments", "reply_to_thread")) {
+                client.call(tool, mapOf("id" to otherId, "thread_id" to thread, "body" to "Wrong artifact"), expectError = true)
+                client.call(tool, mapOf("id" to id, "thread_id" to Long.MAX_VALUE, "body" to "Missing thread"), expectError = true)
+            }
+            for (body in listOf("  ", "x".repeat(10001))) {
+                client.call("start_discussion_thread", mapOf("id" to id, "body" to body), expectError = true)
+                client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to body), expectError = true)
+            }
+            for (tool in listOf("list_discussion_threads", "list_thread_comments", "start_discussion_thread", "reply_to_thread")) {
+                client.call(tool, mapOf("id" to "nonexistent_artifact_id", "thread_id" to thread, "body" to "Missing artifact"), expectError = true)
+            }
+            assertEquals(4, jdbc.queryForObject(
+                "select count(*) from comments c join comment_threads t on t.id = c.thread_id where t.artifact_id = ?", Int::class.java, id,
+            ))
+            assertEquals(2, jdbc.queryForObject("select count(*) from comment_threads where artifact_id = ?", Int::class.java, id))
+            assertEquals(0, jdbc.queryForObject("select count(*) from comment_threads where artifact_id = ?", Int::class.java, otherId))
+            assertEquals("<h1>Revised</h1>", contents(id))
+            assertEquals(2, jdbc.queryForObject("select current_version from html_pages where id = ?", Int::class.java, id))
+        }
+    }
+
     private fun contents(id: String) =
         jdbc.queryForObject(
             "select v.html from html_page_versions v join html_pages p on p.id = v.page_id and p.current_version = v.version where p.id = ?",

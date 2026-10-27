@@ -94,7 +94,7 @@ class ArtifactInteractions extends EventTarget {
     for (const comment of comments) {
       if (!comment.xpath || this.threads.has(comment.threadId)) continue;
       this.threads.set(comment.threadId, {
-        threadId: comment.threadId, number: this.threads.size + 1,
+        threadId: comment.threadId, number: comment.threadNumber,
         xpath: comment.xpath, relativeX: comment.relativeX ?? 1, relativeY: comment.relativeY ?? 0
       });
     }
