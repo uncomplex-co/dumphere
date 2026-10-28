@@ -41,6 +41,9 @@ object ArtifactViewerIds {
     const val COMMENT_DELETE = "comment-delete-button"
     const val COMMENT_DELETE_CONFIRM = "comment-delete-confirm-button"
     const val COMMENT_DELETE_CANCEL = "comment-delete-cancel-button"
+    const val THREAD_RESOLVE = "discussion-resolve-button"
+    const val THREAD_REOPEN = "discussion-reopen-button"
+    const val THREAD_FILTER = "discussion-filter-button"
     const val THREAD = "artifact-comment-thread"
     const val THREAD_REPLY = "comments-reply-button"
     const val START_DISCUSSION = "discussion-add-comment-button"
@@ -125,6 +128,9 @@ class ArtifactViewer(
                 "COMMENT_DELETE_ID" to ArtifactViewerIds.COMMENT_DELETE,
                 "COMMENT_DELETE_CONFIRM_ID" to ArtifactViewerIds.COMMENT_DELETE_CONFIRM,
                 "COMMENT_DELETE_CANCEL_ID" to ArtifactViewerIds.COMMENT_DELETE_CANCEL,
+                "THREAD_RESOLVE_ID" to ArtifactViewerIds.THREAD_RESOLVE,
+                "THREAD_REOPEN_ID" to ArtifactViewerIds.THREAD_REOPEN,
+                "THREAD_FILTER_ID" to ArtifactViewerIds.THREAD_FILTER,
                 "THREAD_ID" to ArtifactViewerIds.THREAD,
                 "THREAD_REPLY_ID" to ArtifactViewerIds.THREAD_REPLY,
                 "START_DISCUSSION_ID" to ArtifactViewerIds.START_DISCUSSION,

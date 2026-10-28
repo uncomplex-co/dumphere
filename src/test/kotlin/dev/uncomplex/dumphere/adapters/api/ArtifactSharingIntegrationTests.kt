@@ -1227,6 +1227,74 @@ class ArtifactSharingIntegrationTests {
         assertEquals(before, jdbc.queryForList("select * from comments c join comment_threads t on t.id = c.thread_id where t.artifact_id = ? order by c.id", id))
     }
 
+    @Test
+    fun `team members can resolve and reopen threads without changing comments anchors or numbers`() {
+        val id = publish("<p>Review this</p>")
+        val first = json.readTree(mvc.perform(post("/p/$id/comments").with(member()).with(csrf())
+            .contentType("application/json").content("""{"body":"Please review","version":1,"xpath":"/html/body/p","relativeX":0.3,"relativeY":0.7}"""))
+            .andExpect(status().isCreated).andReturn().response.contentAsString)
+        val threadId = first.path("threadId").asLong()
+        mvc.perform(post("/p/$id/threads/$threadId/comments").with(member()).with(csrf())
+            .contentType("application/json").content("""{"body":"Reviewed","version":1}"""))
+            .andExpect(status().isCreated)
+        val beforeComments = jdbc.queryForList("select * from comments where thread_id = ? order by id", threadId)
+        val beforeThread = jdbc.queryForMap("select * from comment_threads where id = ?", threadId)
+        fun resolution(resolved: Boolean) = json.readTree(mvc.perform(
+            patch("/p/$id/threads/$threadId/resolution").with(member(subject = "reviewer")).with(csrf())
+                .contentType("application/json").content(json.writeValueAsString(mapOf("resolved" to resolved))),
+        ).andExpect(status().isOk).andReturn().response.contentAsString)
+
+        val resolved = resolution(true)
+        val resolvedAt = Instant.parse(resolved.path("resolvedAt").asString())
+        assertEquals(1, resolved.path("threadNumber").asInt())
+        assertEquals(resolvedAt, jdbc.queryForObject("select resolved_at from comment_threads where id = ?", Timestamp::class.java, threadId)?.toInstant())
+        assertEquals("reviewer", jdbc.queryForObject(
+            "select u.subject from comment_threads t join users u on u.id = t.resolved_by_user_id where t.id = ?", String::class.java, threadId,
+        ))
+        assertEquals(resolved.path("resolvedAt"), resolution(true).path("resolvedAt"))
+        val listed = json.readTree(mvc.perform(get("/p/$id/comments").with(member()))
+            .andExpect(status().isOk).andReturn().response.contentAsString)
+        assertTrue(listed.isArray)
+        assertEquals(2, listed.size())
+        assertTrue(listed.asArray().values().all { it.path("resolvedAt") == resolved.path("resolvedAt") })
+        assertTrue(resolution(false).path("resolvedAt").isNull)
+        assertTrue(resolution(false).path("resolvedAt").isNull)
+        assertNull(jdbc.queryForObject("select resolved_by_user_id from comment_threads where id = ?", Long::class.java, threadId))
+        assertEquals(beforeThread, jdbc.queryForMap("select * from comment_threads where id = ?", threadId))
+        assertEquals(beforeComments, jdbc.queryForList("select * from comments where thread_id = ? order by id", threadId))
+        assertEquals("<p>Review this</p>", committedContents(id))
+        assertEquals(1, committedVersion(id))
+    }
+
+    @Test
+    fun `resolution rejects anonymous outsiders missing CSRF mismatched artifacts and deleted threads`() {
+        val id = publish("<p>Resolution access</p>")
+        val otherId = publish("<p>Other</p>")
+        setVisibility(id, "public")
+        val first = json.readTree(mvc.perform(post("/p/$id/comments").with(member()).with(csrf())
+            .contentType("application/json").content("""{"body":"Review","version":1}"""))
+            .andExpect(status().isCreated).andReturn().response.contentAsString)
+        val threadId = first.path("threadId").asLong()
+        val before = jdbc.queryForMap("select * from comment_threads where id = ?", threadId)
+        for (resolved in listOf(true, false)) {
+            fun request(artifactId: String = id, target: Long = threadId) = patch("/p/$artifactId/threads/$target/resolution")
+                .contentType("application/json").content(json.writeValueAsString(mapOf("resolved" to resolved)))
+            mvc.perform(request().with(csrf())).andExpect(status().isForbidden)
+            mvc.perform(request().with(member("outsider@elsewhere.test")).with(csrf())).andExpect(status().isForbidden)
+            mvc.perform(request().with(member())).andExpect(status().isForbidden)
+            mvc.perform(request(otherId).with(member()).with(csrf())).andExpect(status().isNotFound)
+            mvc.perform(request(target = Long.MAX_VALUE).with(member()).with(csrf())).andExpect(status().isNotFound)
+        }
+        assertEquals(before, jdbc.queryForMap("select * from comment_threads where id = ?", threadId))
+        mvc.perform(delete("/p/$id/comments/${first.path("id").asLong()}").with(member()).with(csrf())).andExpect(status().isNoContent)
+        for (resolved in listOf(true, false)) {
+            mvc.perform(patch("/p/$id/threads/$threadId/resolution").with(member()).with(csrf())
+                .contentType("application/json").content(json.writeValueAsString(mapOf("resolved" to resolved))))
+                .andExpect(status().isNotFound)
+        }
+        assertNull(jdbc.queryForObject("select resolved_at from comment_threads where id = ?", Timestamp::class.java, threadId))
+    }
+
     private fun member(
         email: String = "alex@example.com",
         subject: String = "different-team-member",

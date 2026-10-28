@@ -4,6 +4,7 @@ import dev.uncomplex.dumphere.application.ArtifactComment
 import dev.uncomplex.dumphere.application.ArtifactComments
 import dev.uncomplex.dumphere.application.EditCommentResult
 import dev.uncomplex.dumphere.application.DeleteCommentResult
+import dev.uncomplex.dumphere.application.DiscussionThreadState
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.authenticatedUser
 import dev.uncomplex.dumphere.ports.CommentThreadRepository
@@ -129,6 +130,21 @@ class ArtifactCommentsController(
         }
     }
 
+    @PatchMapping("/p/{id}/threads/{threadId}/resolution")
+    fun setResolved(
+        @PathVariable id: String,
+        @PathVariable threadId: Long,
+        @RequestBody request: SetThreadResolutionRequest,
+        authentication: Authentication?,
+    ): ResponseEntity<DiscussionThreadState> {
+        requireAccess(id, authentication)
+        val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+            ?: throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        val state = comments.setResolved(id, threadId, request.resolved, author)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(state)
+    }
+
     private fun validatedBody(value: String): String {
         val body = value.trim()
         if (body.isEmpty() || body.length > 10000) {
@@ -160,3 +176,5 @@ data class ReplyToThreadRequest(
 )
 
 data class EditArtifactCommentRequest(val body: String)
+
+data class SetThreadResolutionRequest(val resolved: Boolean)

@@ -216,6 +216,34 @@ class ArtifactMcpIntegrationTests {
             assertEquals("<h1>Revised</h1>", contents(id))
             assertEquals(2, jdbc.queryForObject("select current_version from html_pages where id = ?", Int::class.java, id))
 
+            val resolved = client.metadata(client.call("resolve_discussion_thread", mapOf("id" to id, "thread_id" to thread)))
+            assertEquals(thread, resolved.path("threadId").asLong())
+            assertEquals(1, resolved.path("threadNumber").asInt())
+            val resolvedAt = Instant.parse(resolved.path("resolvedAt").asString())
+            assertEquals(resolvedAt, jdbc.queryForObject("select resolved_at from comment_threads where id = ?", Timestamp::class.java, thread)?.toInstant())
+            val repeatedResolve = client.metadata(client.call("resolve_discussion_thread", mapOf("id" to id, "thread_id" to thread)))
+            assertEquals(resolved.path("resolvedAt"), repeatedResolve.path("resolvedAt"))
+            val resolvedThreads = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
+            assertTrue(resolvedThreads.isArray)
+            assertEquals(2, resolvedThreads.size())
+            assertEquals(resolved.path("resolvedAt"), resolvedThreads[0].path("resolvedAt"))
+            val resolvedComments = client.metadata(client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread)))
+            assertTrue(resolvedComments.isArray)
+            assertEquals(3, resolvedComments.size())
+            assertTrue(resolvedComments.asArray().values().all { it.path("resolvedAt") == resolved.path("resolvedAt") })
+            val reopened = client.metadata(client.call("reopen_discussion_thread", mapOf("id" to id, "thread_id" to thread)))
+            assertTrue(reopened.path("resolvedAt").isNull)
+            assertNull(jdbc.queryForObject("select resolved_at from comment_threads where id = ?", Timestamp::class.java, thread))
+            assertTrue(client.metadata(client.call("reopen_discussion_thread", mapOf("id" to id, "thread_id" to thread))).path("resolvedAt").isNull)
+            val reopenedThreads = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
+            assertTrue(reopenedThreads.isArray)
+            assertTrue(reopenedThreads[0].path("resolvedAt").isNull)
+            for (tool in listOf("resolve_discussion_thread", "reopen_discussion_thread")) {
+                client.call(tool, mapOf("id" to otherId, "thread_id" to thread), expectError = true)
+                client.call(tool, mapOf("id" to id, "thread_id" to Long.MAX_VALUE), expectError = true)
+                client.call(tool, mapOf("id" to "nonexistent_artifact_id", "thread_id" to thread), expectError = true)
+            }
+
             fun editComment(commentId: Long, body: String) = json.readTree(mvc.perform(
                 patch("/p/$id/comments/$commentId").header("Authorization", "Bearer $token").with(csrf())
                     .contentType("application/json").content(json.writeValueAsString(mapOf("body" to body))),
@@ -258,6 +286,8 @@ class ArtifactMcpIntegrationTests {
             assertEquals(second.path("threadId"), surviving[0].path("threadId"))
             client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread), expectError = true)
             client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to "Cannot resurrect"), expectError = true)
+            client.call("resolve_discussion_thread", mapOf("id" to id, "thread_id" to thread), expectError = true)
+            client.call("reopen_discussion_thread", mapOf("id" to id, "thread_id" to thread), expectError = true)
             assertEquals(3, jdbc.queryForObject("select count(*) from comments where thread_id = ? and deleted_at is not null", Int::class.java, thread))
             assertNotNull(jdbc.queryForObject("select deleted_at from comment_threads where id = ?", Timestamp::class.java, thread))
             assertEquals("Final first topic", jdbc.queryForObject("select body from comments where id = ?", String::class.java, first.path("id").asLong()))

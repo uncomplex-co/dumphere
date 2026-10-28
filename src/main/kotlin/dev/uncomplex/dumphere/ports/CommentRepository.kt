@@ -11,7 +11,7 @@ import org.springframework.data.repository.CrudRepository
 interface CommentRepository : CrudRepository<CommentEntity, Long> {
     @Query(
         """
-        select c.id, c.thread_id, t.number as thread_number, c.body, c.created_at, c.edited_at,
+        select c.id, c.thread_id, t.number as thread_number, c.body, c.created_at, c.edited_at, t.resolved_at,
                coalesce(u.subject = :subject, false) as can_edit, t.xpath, t.relative_x, t.relative_y,
                case when c.author_user_id is null then 'Anonymous'
                     else coalesce(u.display_name, 'Team member') end as author
@@ -27,7 +27,7 @@ interface CommentRepository : CrudRepository<CommentEntity, Long> {
 
     @Query(
         """
-        select c.id, c.thread_id, t.number as thread_number, c.body, c.created_at, c.edited_at,
+        select c.id, c.thread_id, t.number as thread_number, c.body, c.created_at, c.edited_at, t.resolved_at,
                coalesce(u.subject = :subject, false) as can_edit, t.xpath, t.relative_x, t.relative_y,
                case when c.author_user_id is null then 'Anonymous'
                     else coalesce(u.display_name, 'Team member') end as author
@@ -46,7 +46,7 @@ interface CommentRepository : CrudRepository<CommentEntity, Long> {
             select distinct on (t.id) t.id as thread_id, t.number as thread_number, c.body as first_comment,
                    case when c.author_user_id is null then 'Anonymous'
                         else coalesce(u.display_name, 'Team member') end as author,
-                   c.created_at, t.xpath, t.relative_x, t.relative_y,
+                   c.created_at, t.xpath, t.relative_x, t.relative_y, t.resolved_at,
                    count(*) over (partition by t.id) - 1 as reply_count,
                    max(c.created_at) over (partition by t.id) as last_activity_at
             from comment_threads t

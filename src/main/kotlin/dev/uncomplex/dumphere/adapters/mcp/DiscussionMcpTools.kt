@@ -4,6 +4,7 @@ import dev.uncomplex.dumphere.application.ArtifactComment
 import dev.uncomplex.dumphere.application.ArtifactCommentThread
 import dev.uncomplex.dumphere.application.ArtifactComments
 import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.application.DiscussionThreadState
 import dev.uncomplex.dumphere.application.authenticatedUser
 import dev.uncomplex.dumphere.ports.CommentThreadRepository
 import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
@@ -21,7 +22,7 @@ class DiscussionMcpTools(
 ) {
     @McpTool(
         name = "list_discussion_threads",
-        description = "List all discussion threads for an artifact, newest activity first. Includes first comment text, reply count, author, and any element anchor. Threads persist across artifact versions.",
+        description = "List all non-deleted discussion threads for an artifact, including resolved threads, newest activity first. Includes first comment text, reply count, author, any element anchor, and resolvedAt (null for open threads). Threads persist across artifact versions.",
     )
     fun listDiscussionThreads(
         @McpToolParam(description = "Published artifact id", required = true) id: String,
@@ -63,6 +64,24 @@ class DiscussionMcpTools(
     ): ArtifactComment {
         val versionId = currentVersionId(id)
         return comments.reply(requireThread(id, thread_id), versionId, validatedBody(body), currentUser())
+    }
+
+    @McpTool(name = "resolve_discussion_thread", description = "Resolve a discussion thread without deleting its comments. Already-resolved threads are unchanged.")
+    fun resolveDiscussionThread(
+        @McpToolParam(description = "Published artifact id", required = true) id: String,
+        @McpToolParam(description = "Discussion thread id", required = true) thread_id: Long,
+    ): DiscussionThreadState {
+        requirePage(id)
+        return requireNotNull(comments.setResolved(id, thread_id, true, currentUser())) { "thread not found: $thread_id" }
+    }
+
+    @McpTool(name = "reopen_discussion_thread", description = "Reopen a resolved discussion thread, preserving comments and its stable thread number. Already-open threads are unchanged.")
+    fun reopenDiscussionThread(
+        @McpToolParam(description = "Published artifact id", required = true) id: String,
+        @McpToolParam(description = "Discussion thread id", required = true) thread_id: Long,
+    ): DiscussionThreadState {
+        requirePage(id)
+        return requireNotNull(comments.setResolved(id, thread_id, false, currentUser())) { "thread not found: $thread_id" }
     }
 
     private fun requirePage(id: String) = requireNotNull(pages.readMetadata(id)) { "page not found: $id" }

@@ -238,7 +238,6 @@
     const body = document.createElement('p');
     body.className = 'comment-body';
     body.textContent = comment.body;
-    meta.append(authorGroup, time);
     item.append(meta, body);
     const edited = document.createElement('span');
     edited.className = 'comment-edited';
@@ -250,9 +249,17 @@
     showEdited(comment.editedAt);
     const trailing = document.createElement('div');
     trailing.className = 'comment-meta-trailing';
-    trailing.append(time, edited);
-    meta.append(trailing);
-    if (comment.canEdit) addCommentActions(item, trailing, comment, body, showEdited, firstInThread);
+    const timestamps = document.createElement('div');
+    timestamps.className = 'comment-timestamps';
+    timestamps.append(time, edited);
+    const authorDetails = document.createElement('div');
+    authorDetails.className = 'comment-author-details';
+    authorDetails.append(authorGroup, timestamps);
+    meta.append(authorDetails, trailing);
+    if (firstInThread) addThreadResolution(trailing, comment);
+    if (comment.canEdit || (firstInThread && comment.resolvedAt && canManage)) {
+      addCommentActions(item, trailing, comment, body, showEdited, firstInThread);
+    }
     if (comment.xpath) item.dataset.xpath = comment.xpath;
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
@@ -269,6 +276,41 @@
       }
     });
     return item;
+  }
+
+  function addThreadResolution(trailing, comment) {
+    const resolved = !!comment.resolvedAt;
+    if (!canManage || resolved) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'icon-button thread-resolve-button';
+    button.dataset.testid = $('discussion-filter').dataset.resolveTestid;
+    button.setAttribute('aria-label', 'Resolve thread');
+    button.title = 'Mark as resolved';
+    button.innerHTML = '<svg aria-hidden="true"><use href="#icon-check"/></svg>';
+    button.addEventListener('click', () => changeThreadResolution(comment, button));
+    trailing.append(button);
+  }
+
+  async function changeThreadResolution(comment, button) {
+    button.disabled = true;
+    const resolved = !!comment.resolvedAt;
+    try {
+      const response = await fetch('/p/' + id + '/threads/' + comment.threadId + '/resolution', {
+        method: 'PATCH', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': initial.csrf },
+        body: JSON.stringify({ resolved: !resolved })
+      });
+      if (!response.ok) throw new Error([401, 403].includes(response.status)
+        ? 'Your access may have changed. Reload the page to continue.' : 'Could not update the thread. Try again.');
+      await loadComments();
+      $('discussion-filter').focus();
+      notify(resolved ? 'Thread reopened.' : 'Thread resolved.');
+    } catch (error) {
+      notify(error.message === 'Failed to fetch' ? 'Could not update the thread. Check your connection and try again.' : error.message);
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function addCommentActions(item, trailing, comment, body, showEdited, firstInThread) {
@@ -302,17 +344,30 @@
       menu.hidePopover();
       confirmCommentDelete(comment, item, firstInThread, trigger);
     });
-    menu.append(edit, remove);
+    if (comment.canEdit) menu.append(edit, remove);
+    if (firstInThread && comment.resolvedAt && canManage) {
+      const reopen = document.createElement('button');
+      reopen.type = 'button';
+      reopen.setAttribute('role', 'menuitem');
+      reopen.dataset.testid = $('discussion-filter').dataset.reopenTestid;
+      reopen.textContent = 'Re-open';
+      reopen.addEventListener('click', () => {
+        menu.hidePopover();
+        changeThreadResolution(comment, reopen);
+      });
+      menu.append(reopen);
+    }
     menu.addEventListener('beforetoggle', event => {
       if (event.newState !== 'open') return;
       const bounds = trigger.getBoundingClientRect();
       menu.style.left = Math.max(8, Math.min(bounds.right - 140, innerWidth - 148)) + 'px';
-      menu.style.top = Math.max(8, Math.min(bounds.bottom + 4, innerHeight - 100)) + 'px';
+      const height = menu.children.length * 40 + 8;
+      menu.style.top = Math.max(8, Math.min(bounds.bottom + 4, innerHeight - height - 8)) + 'px';
     });
     menu.addEventListener('toggle', event => {
       const open = event.newState === 'open';
       trigger.setAttribute('aria-expanded', String(open));
-      if (open) edit.focus();
+      if (open) menu.firstElementChild?.focus();
     });
     trigger.addEventListener('keydown', event => {
       if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
@@ -328,13 +383,16 @@
       } else if (event.key === 'Tab') menu.hidePopover();
       else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         event.preventDefault();
-        const items = [edit, remove];
+        const items = Array.from(menu.querySelectorAll('[role="menuitem"]'));
         const index = items.indexOf(document.activeElement);
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
           : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
         items[next].focus();
       }
     });
+    trailing.append(trigger);
+    item.append(menu);
+    if (!comment.canEdit) return;
     const composer = document.createElement('comment-composer');
     composer.hidden = true;
     composer.className = 'comment-edit-composer';
@@ -385,8 +443,7 @@
           ? 'Could not save your comment. Check your connection and try again.' : error.message);
       }
     });
-    trailing.append(trigger);
-    item.append(menu, composer);
+    item.append(composer);
   }
 
   const deleteDialog = $('comment-delete-dialog');
@@ -450,7 +507,7 @@
     for (const item of $('comments-list').querySelectorAll('.comment')) {
       item.classList.toggle('is-selected', item.dataset.threadId === String(threadId));
     }
-    for (const thread of $('comments-list').children) {
+    for (const thread of $('comments-list').querySelectorAll(':scope > .comment-thread')) {
       const selected = thread.dataset.threadId === String(threadId);
       thread.classList.toggle('is-selected', selected);
       thread.querySelector('.thread-reply').hidden = !selected;
@@ -510,6 +567,7 @@
         const thread = document.createElement('li');
         thread.className = 'comment-thread';
         thread.dataset.threadId = comment.threadId;
+        thread.dataset.resolved = String(!!comment.resolvedAt);
         thread.dataset.testid = initial.threadTestid;
         const messages = document.createElement('ol');
         messages.className = 'thread-comments';
@@ -523,7 +581,25 @@
     for (const [threadId, thread] of threads) {
       thread.append(replyControls(threadId));
     }
-    $('comments-list').replaceChildren(...threads.values());
+    const rows = Array.from(threads.values());
+    if ($('discussion-filter').getAttribute('aria-pressed') === 'true') {
+      const grouped = [];
+      for (const [resolved, label] of [[false, 'Open'], [true, 'Resolved']]) {
+        const group = rows.filter(thread => thread.dataset.resolved === String(resolved));
+        if (!group.length) continue;
+        if (!resolved) {
+          grouped.push(...group);
+          continue;
+        }
+        const heading = document.createElement('li');
+        heading.className = 'discussion-group-heading';
+        const title = document.createElement('h3');
+        title.textContent = label;
+        heading.append(title);
+        grouped.push(heading, ...group);
+      }
+      $('comments-list').replaceChildren(...grouped);
+    } else $('comments-list').replaceChildren(...rows);
     selectThread(selectedThreadId);
   }
 
@@ -605,10 +681,12 @@
       if (!response.ok) throw new Error('Could not load comments. Try again.');
       const comments = await response.json();
       if (request !== commentsRequest || !canView) return;
-      interactions.setThreads(comments);
-      renderThreads(comments);
+      const showResolved = $('discussion-filter').getAttribute('aria-pressed') === 'true';
+      const visible = comments.filter(comment => showResolved || !comment.resolvedAt);
+      interactions.setThreads(visible);
+      renderThreads(visible);
       updateAttachmentState();
-      $('comments-status').textContent = '';
+      $('comments-status').textContent = !visible.length && comments.length ? 'No open discussions.' : '';
       discussionEmpty = comments.length === 0;
       $('discussion-empty').hidden = !discussionEmpty || !$('comment-composer').hidden;
     } catch (error) {
@@ -630,6 +708,11 @@
   });
   $('comments-close').addEventListener('click', () => closeComments());
   $('comments-retry').addEventListener('click', loadComments);
+  $('discussion-filter').addEventListener('click', () => {
+    const button = $('discussion-filter');
+    button.setAttribute('aria-pressed', String(button.getAttribute('aria-pressed') !== 'true'));
+    loadComments();
+  });
   $('comments-panel').addEventListener('keydown', event => {
     if (event.key === 'Escape') {
       event.preventDefault();

@@ -12,6 +12,7 @@
 </head>
 <body th:attr="data-id=${ID},data-format=${FORMAT},data-comment-testid=${COMMENT_ID},data-thread-testid=${THREAD_ID},data-reply-testid=${THREAD_REPLY_ID},data-comment-body-testid=${COMMENT_BODY_ID},data-comment-post-testid=${COMMENT_POST_ID},data-comment-cancel-testid=${COMMENT_CANCEL_ID},data-comment-menu-testid=${COMMENT_MENU_ID},data-comment-edit-testid=${COMMENT_EDIT_ID},data-comment-edit-body-testid=${COMMENT_EDIT_BODY_ID},data-comment-edit-save-testid=${COMMENT_EDIT_SAVE_ID},data-comment-edit-cancel-testid=${COMMENT_EDIT_CANCEL_ID},data-visibility=${VISIBILITY},data-public-until=${PUBLIC_UNTIL},data-version=${VERSION},data-can-manage=${CAN_MANAGE},data-can-view=${CAN_VIEW},data-csrf=${CSRF}">
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-check" viewBox="0 0 24 24"><path stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></symbol>
     <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
     <symbol id="icon-edit" viewBox="0 0 24 24"><path stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/></symbol>
     <symbol id="icon-delete" viewBox="0 0 24 24"><path stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></symbol>
@@ -59,7 +60,13 @@
     </div>
   </div>
   <aside class="comments-panel" id="comments-panel" aria-labelledby="comments-title" hidden>
-    <div class="comments-header"><h2 id="comments-title">Discussion</h2><div class="actions"><button class="icon-button selection-toggle" id="element-selection" th:attr="data-testid=${ELEMENT_SELECTION_ID}" th:hidden="${FORMAT != 'html'}" aria-label="Select elements for comments" aria-pressed="false" title="Select elements for comments"><svg aria-hidden="true"><use href="#icon-select-element"/></svg></button><button class="icon-button" id="comment-add" th:attr="data-testid=${COMMENT_ADD_ID}" aria-label="Add comment" title="Add comment"><svg aria-hidden="true"><use href="#icon-plus"/></svg></button><button class="icon-button" id="comments-close" th:attr="data-testid=${COMMENTS_CLOSE_ID}" aria-label="Close comments" title="Close comments"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div></div>
+    <div class="comments-header">
+      <div class="comments-heading">
+        <h2 id="comments-title">Discussions</h2>
+        <button class="discussion-filter" id="discussion-filter" type="button" aria-pressed="false" th:attr="data-testid=${THREAD_FILTER_ID},data-resolve-testid=${THREAD_RESOLVE_ID},data-reopen-testid=${THREAD_REOPEN_ID}">Show resolved</button>
+      </div>
+      <div class="actions"><button class="icon-button selection-toggle" id="element-selection" th:attr="data-testid=${ELEMENT_SELECTION_ID}" th:hidden="${FORMAT != 'html'}" aria-label="Select elements for comments" aria-pressed="false" title="Select elements for comments"><svg aria-hidden="true"><use href="#icon-select-element"/></svg></button><button class="icon-button" id="comment-add" th:attr="data-testid=${COMMENT_ADD_ID}" aria-label="Add comment" title="Add comment"><svg aria-hidden="true"><use href="#icon-plus"/></svg></button><button class="icon-button" id="comments-close" th:attr="data-testid=${COMMENTS_CLOSE_ID}" aria-label="Close comments" title="Close comments"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    </div>
     <comment-composer id="comment-composer" th:attr="data-body-testid=${COMMENT_BODY_ID},data-post-testid=${COMMENT_POST_ID},data-cancel-testid=${COMMENT_CANCEL_ID}" hidden></comment-composer>
     <p class="comments-status" id="comments-status" role="status"></p>
     <button class="button comments-retry" id="comments-retry" th:attr="data-testid=${COMMENT_RETRY_ID}" hidden>Try again</button>

@@ -16,6 +16,8 @@ data class CommentThreadEntity(
     val relativeX: Double? = null,
     val relativeY: Double? = null,
     val deletedAt: Instant? = null,
+    val resolvedAt: Instant? = null,
+    val resolvedByUserId: Long? = null,
 )
 
 @Table("comments")

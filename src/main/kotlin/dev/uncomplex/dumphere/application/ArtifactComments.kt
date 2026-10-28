@@ -7,6 +7,7 @@ import dev.uncomplex.dumphere.ports.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 data class ArtifactComment(
     val id: Long,
@@ -20,6 +21,7 @@ data class ArtifactComment(
     val relativeY: Double? = null,
     val editedAt: Instant? = null,
     val canEdit: Boolean = false,
+    val resolvedAt: Instant? = null,
 )
 
 data class ArtifactCommentThread(
@@ -33,7 +35,10 @@ data class ArtifactCommentThread(
     val xpath: String? = null,
     val relativeX: Double? = null,
     val relativeY: Double? = null,
+    val resolvedAt: Instant? = null,
 )
+
+data class DiscussionThreadState(val threadId: Long, val threadNumber: Long, val resolvedAt: Instant?)
 
 @Service
 class ArtifactComments(
@@ -127,6 +132,21 @@ class ArtifactComments(
         return DeleteCommentResult.DELETED
     }
 
+    @Transactional
+    fun setResolved(artifactId: String, threadId: Long, resolved: Boolean, author: AuthenticatedUser): DiscussionThreadState? {
+        val thread = threads.findByIdForUpdate(threadId)
+            ?.takeIf { it.artifactId == artifactId && it.deletedAt == null } ?: return null
+        if ((thread.resolvedAt != null) == resolved) {
+            return DiscussionThreadState(threadId, thread.number, thread.resolvedAt)
+        }
+        val user = users.provision(author)
+        val updated = threads.save(thread.copy(
+            resolvedAt = if (resolved) Instant.now().truncatedTo(ChronoUnit.MICROS) else null,
+            resolvedByUserId = if (resolved) user.id else null,
+        ))
+        return DiscussionThreadState(threadId, updated.number, updated.resolvedAt)
+    }
+
     private fun saveComment(
         thread: CommentThreadEntity,
         versionId: Long,
@@ -155,6 +175,7 @@ class ArtifactComments(
             relativeX = thread.relativeX,
             relativeY = thread.relativeY,
             canEdit = user != null,
+            resolvedAt = thread.resolvedAt,
         )
     }
 }
