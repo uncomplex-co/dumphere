@@ -25,10 +25,10 @@ class CommentComposer extends HTMLElement {
     this.input.dataset.testid = this.dataset.bodyTestid;
     this.cancelButton.dataset.testid = this.dataset.cancelTestid;
     this.postButton.dataset.testid = this.dataset.postTestid;
-    this.setSubmitting(false);
+    this.model = null;
 
     this.input.addEventListener('input', () => {
-      this.postButton.disabled = this.submitting || !this.input.value.trim();
+      this.dispatchEvent(new CustomEvent('comment-input', { bubbles: true, detail: { body: this.input.value } }));
       this.resizeInput();
     });
 
@@ -41,7 +41,6 @@ class CommentComposer extends HTMLElement {
 
     this.cancelButton.addEventListener('click', () => {
       if (this.submitting) return;
-      this.complete();
       this.dispatchEvent(new CustomEvent('comment-cancel', { bubbles: true }));
     });
     this.form.addEventListener('submit', event => {
@@ -49,42 +48,34 @@ class CommentComposer extends HTMLElement {
       if (this.submitting) return;
       const body = this.input.value.trim();
       if (!body) {
-        this.fail('Write a comment before posting.');
         this.input.focus();
         return;
       }
-      this.error.textContent = '';
-      this.setSubmitting(true);
       this.dispatchEvent(new CustomEvent('comment-submit', { bubbles: true, detail: { body } }));
     });
   }
 
-  show() {
-    this.hidden = false;
-    this.resizeInput();
-    this.input.focus();
-  }
-
-  complete() {
-    this.form.reset();
-    this.error.textContent = '';
-    this.setSubmitting(false);
-    this.hidden = true;
-    this.input.style.height = '';
-  }
-
-  fail(message) {
-    this.error.textContent = message;
-    this.setSubmitting(false);
-  }
-
-  setSubmitting(submitting) {
-    this.submitting = submitting;
-    this.postButton.disabled = submitting || !this.input.value.trim();
-    this.cancelButton.disabled = submitting;
-    this.input.readOnly = submitting;
-    this.postButton.textContent = submitting ? (this.getAttribute('pending-label') || 'Posting...') : this.postLabel;
-    this.dispatchEvent(new Event('composer-statechange', { bubbles: true }));
+  render(model) {
+    if (!this.form) return;
+    const signature = JSON.stringify([!!model?.open, model?.body || '', !!model?.pending,
+      model?.error || '', !!model?.remoteDeleted, !!model?.remoteChanged]);
+    if (this.model === signature) return;
+    this.model = signature;
+    const wasOpen = !this.hidden;
+    const oldPending = this.submitting;
+    this.hidden = !model?.open;
+    this.submitting = !!model?.pending;
+    const body = model?.body || '';
+    if (this.input.value !== body) this.input.value = body;
+    const conflict = model?.remoteDeleted ? 'This comment or thread was deleted. Your draft is preserved; copy it before cancelling.'
+      : model?.remoteChanged ? 'This comment was edited by someone else. Your draft is preserved. Copy it, cancel, and reopen to review their changes.' : '';
+    this.error.textContent = model?.error || conflict;
+    this.postButton.disabled = this.submitting || !body.trim() || !!model?.remoteDeleted || !!model?.remoteChanged;
+    this.cancelButton.disabled = this.submitting;
+    this.input.readOnly = this.submitting;
+    this.postButton.textContent = this.submitting ? (this.getAttribute('pending-label') || 'Posting...') : this.postLabel;
+    if (model?.open) this.resizeInput();
+    if (wasOpen !== !this.hidden || oldPending !== this.submitting) this.dispatchEvent(new Event('composer-statechange', { bubbles: true }));
   }
 
   resizeInput() {

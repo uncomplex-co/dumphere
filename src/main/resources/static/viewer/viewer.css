@@ -66,6 +66,9 @@ dialog::backdrop{background:#17162266;backdrop-filter:blur(3px)}
 .icon-button{background:transparent;border:0;padding:8px;display:grid;place-items:center;color:#777}
 .icon-button:hover{background:#f5f5f8;border-radius:7px;color:var(--ink)}
 .comments-toggle[aria-expanded="true"]{background:#f3f0ff;border-radius:7px;color:var(--accent)}
+.comments-toggle:focus-visible{outline:none}
+.comments-toggle{position:relative}
+.comments-toggle.has-unread::after{content:"";position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px #fff}
 .selection-toggle[aria-pressed="true"]{background:var(--accent);border-radius:7px;color:#fff}
 .comments-panel{position:fixed;top:48px;right:0;bottom:0;width:360px;max-width:100%;background:#fff;border-left:1px solid var(--line);display:flex;flex-direction:column;z-index:2;overflow:auto}
 .comments-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);flex-shrink:0}
