@@ -14,6 +14,7 @@ class ArtifactInteractions extends EventTarget {
     this.resolved = new Set();
     this.selection = null;
     this.bounds = null;
+    this.composerPosition = null;
     window.addEventListener('message', event => this.receive(event));
     frame.addEventListener('load', () => {
       this.ready = false;
@@ -131,13 +132,25 @@ class ArtifactInteractions extends EventTarget {
     this.layout();
   }
 
+  setComposerPosition(position) {
+    if (this.composerPosition?.x === position?.x && this.composerPosition?.y === position?.y) return;
+    this.composerPosition = position;
+    this.layout();
+  }
+
   layout() {
     if (!this.active) return;
     const frame = this.frame.getBoundingClientRect();
     Object.assign(this.overlay.style, { left: frame.left + 'px', top: frame.top + 'px', width: frame.width + 'px', height: frame.height + 'px' });
-    if (this.composer.hidden || !this.bounds || !this.selection) return;
+    if (this.composer.hidden) return;
     const width = this.composer.offsetWidth;
     const height = this.composer.offsetHeight;
+    if (this.composerPosition) {
+      this.composer.style.left = Math.max(8, Math.min(frame.width - width - 8, this.composerPosition.x)) + 'px';
+      this.composer.style.top = Math.max(8, Math.min(frame.height - height - 8, this.composerPosition.y)) + 'px';
+      return;
+    }
+    if (!this.bounds || !this.selection) return;
     const x = this.bounds.left + this.selection.relativeX * this.bounds.width;
     const y = this.bounds.top + this.selection.relativeY * this.bounds.height;
     this.composer.style.left = Math.max(8, Math.min(frame.width - width - 8, x + 12)) + 'px';

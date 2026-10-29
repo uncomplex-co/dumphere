@@ -6,7 +6,7 @@ class DiscussionState {
     this.view = {
       open: false, showResolved: false, selectedThreadId: null, selecting: false, menuId: null,
       canView: true, canManage: false, version: 1, loading: false, error: '', unread: false,
-      composers: new Map(), deletion: null, attached: new Set(), order: [], resolutions: new Set()
+      composers: new Map(), deletion: null, attached: new Set(), order: [], resolutions: new Set(), drag: null
     };
     this.listeners = new Set();
     this.generation = 0;
@@ -25,6 +25,14 @@ class DiscussionState {
     this.emit();
   }
 
+  close() {
+    for (const [key, composer] of this.view.composers) {
+      if (composer.mode !== 'edit') this.view.composers.delete(key);
+    }
+    Object.assign(this.view, { open: false, selecting: false, menuId: null, drag: null });
+    this.emit();
+  }
+
   access(access) {
     if (Object.entries(access).every(([key, value]) => this.view[key] === value)) return;
     Object.assign(this.view, access);
@@ -33,7 +41,7 @@ class DiscussionState {
       this.data.comments.clear();
       this.data.loaded = false;
       this.view.composers.clear();
-      Object.assign(this.view, { open: false, selecting: false, deletion: null, selectedThreadId: null, error: '', unread: false });
+      Object.assign(this.view, { open: false, selecting: false, deletion: null, selectedThreadId: null, error: '', unread: false, drag: null });
     }
     this.emit();
   }
@@ -89,7 +97,7 @@ class DiscussionState {
       remoteChanged: false, remoteDeleted: false
     });
     if (options.threadId) this.view.selectedThreadId = options.threadId;
-    if (key === 'attached') this.view.selecting = false;
+    if (key === 'attached') { this.view.selecting = false; this.view.drag = null; }
     this.emit();
   }
 
@@ -104,7 +112,14 @@ class DiscussionState {
   cancel(key) {
     if (this.view.composers.get(key)?.pending) return;
     this.view.composers.delete(key);
-    if (key === 'attached') this.view.selecting = false;
+    if (key === 'attached') { this.view.selecting = false; this.view.drag = null; }
+    this.emit();
+  }
+
+  moveAttached(position) {
+    const composer = this.view.composers.get('attached');
+    if (!composer) return;
+    composer.position = position;
     this.emit();
   }
 
@@ -162,9 +177,11 @@ class DiscussionState {
     try {
       return await this.mutate(() => this.api.save({ ...composer, body }), comment => {
         this.data.comments.set(comment.id, comment);
-        this.view.composers.delete(key);
-        this.view.selectedThreadId = comment.threadId;
-        if (key === 'attached') this.view.selecting = false;
+        if (this.view.composers.get(key) === composer) {
+          this.view.composers.delete(key);
+          this.view.selectedThreadId = comment.threadId;
+          if (key === 'attached') { this.view.selecting = false; this.view.drag = null; }
+        }
       }, composer.threadId || key);
     } catch (error) {
       composer.error = error.message;

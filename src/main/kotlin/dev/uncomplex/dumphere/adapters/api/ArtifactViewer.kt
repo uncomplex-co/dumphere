@@ -30,6 +30,7 @@ object ArtifactViewerIds {
     const val COMMENT_BODY = "comments-body-input"
     const val COMMENT_POST = "comments-post-button"
     const val COMMENT_CANCEL = "comments-cancel-button"
+    const val COMMENT_DRAG = "comments-drag-handle"
     const val COMMENT_RETRY = "comments-retry-button"
     const val THREAD_PIN = "comments-thread-pin"
     const val COMMENT = "artifact-comment"
@@ -117,6 +118,7 @@ class ArtifactViewer(
                 "COMMENT_BODY_ID" to ArtifactViewerIds.COMMENT_BODY,
                 "COMMENT_POST_ID" to ArtifactViewerIds.COMMENT_POST,
                 "COMMENT_CANCEL_ID" to ArtifactViewerIds.COMMENT_CANCEL,
+                "COMMENT_DRAG_ID" to ArtifactViewerIds.COMMENT_DRAG,
                 "COMMENT_RETRY_ID" to ArtifactViewerIds.COMMENT_RETRY,
                 "THREAD_PIN_ID" to ArtifactViewerIds.THREAD_PIN,
                 "COMMENT_ID" to ArtifactViewerIds.COMMENT,

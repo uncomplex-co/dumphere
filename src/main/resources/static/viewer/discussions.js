@@ -238,6 +238,7 @@
       this.bindComposer($('comment-composer'), 'new');
       this.bindComposer($('attached-comment-composer'), 'attached');
       this.state.subscribe(() => this.render());
+      this.bindDrag();
       $('comments-toggle').addEventListener('click', () => {
         if (this.state.view.open) this.close();
         else if (this.state.view.canView) {
@@ -298,7 +299,7 @@
     updateAccess(context) { this.state.access(context); }
     refreshVisible() { if (!document.hidden && this.state.view.canView) return this.state.refresh(); }
     close() {
-      this.state.change({ open: false, selecting: false, menuId: null });
+      this.state.close();
       $('comments-toggle').focus();
     }
     escape() {
@@ -312,6 +313,69 @@
     select(comment) {
       this.state.change({ selectedThreadId: comment.threadId });
       if (comment.xpath) this.interactions.scrollTo(comment.xpath);
+    }
+
+    bindDrag() {
+      const handle = $('attached-comment-drag');
+      const popup = $('attached-composer');
+      const position = () => {
+        const bounds = popup.getBoundingClientRect();
+        const overlay = $('artifact-annotations').getBoundingClientRect();
+        return { x: bounds.left - overlay.left, y: bounds.top - overlay.top };
+      };
+      const move = (x, y) => {
+        const overlay = $('artifact-annotations').getBoundingClientRect();
+        this.state.moveAttached({
+          x: Math.max(8, Math.min(overlay.width - popup.offsetWidth - 8, x)),
+          y: Math.max(8, Math.min(overlay.height - popup.offsetHeight - 8, y))
+        });
+      };
+      const finish = cancel => {
+        const drag = this.state.view.drag;
+        if (!drag) return;
+        this.state.change({ drag: null });
+        if (cancel) this.state.moveAttached(drag.previous);
+        if (handle.hasPointerCapture(drag.pointerId)) handle.releasePointerCapture(drag.pointerId);
+      };
+      handle.addEventListener('pointerdown', event => {
+        if (!event.isPrimary || event.button !== 0 || !this.state.view.composers.has('attached')) return;
+        event.preventDefault();
+        const origin = position();
+        this.state.change({ drag: {
+          pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+          origin, previous: this.state.view.composers.get('attached').position || null
+        } });
+        handle.focus({ preventScroll: true });
+        handle.setPointerCapture(event.pointerId);
+      });
+      handle.addEventListener('pointermove', event => {
+        const drag = this.state.view.drag;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        event.preventDefault();
+        move(drag.origin.x + event.clientX - drag.startX, drag.origin.y + event.clientY - drag.startY);
+      });
+      handle.addEventListener('pointerup', event => {
+        if (this.state.view.drag?.pointerId === event.pointerId) finish(false);
+      });
+      handle.addEventListener('pointercancel', () => finish(true));
+      handle.addEventListener('lostpointercapture', () => finish(false));
+      handle.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (this.state.view.drag) finish(true);
+          else this.state.cancel('attached');
+        } else if (event.key === 'Home') {
+          event.preventDefault();
+          this.state.moveAttached(null);
+        } else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+          event.preventDefault();
+          const origin = position();
+          const step = event.shiftKey ? 40 : 10;
+          move(origin.x + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0),
+            origin.y + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0));
+        }
+      });
     }
     async resolve(threadId, resolved) {
       if (await this.state.resolve(threadId, resolved)) {
@@ -340,7 +404,10 @@
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.state.cancel(key); }
       });
       node.addEventListener('comment-submit', async () => {
+        const submitted = this.state.view.composers.get(key);
         if (await this.state.submit(key)) {
+          const current = this.state.view.composers.get(key);
+          if (!this.state.view.open || (current && current !== submitted)) return;
           const id = this.state.view.selectedThreadId;
           (this.threads.get(id)?.reply || $('comment-add')).focus({ preventScroll: true });
         }
@@ -368,6 +435,7 @@
       $('comment-composer').render(view.composers.get('new'));
       const attachedDraft = view.composers.get('attached');
       set($('attached-composer'), 'hidden', !view.open || !attachedDraft);
+      toggle($('attached-composer'), 'is-dragging', !!view.drag);
       $('attached-comment-composer').render(attachedDraft);
       const all = this.state.threads();
       const visible = this.state.visibleThreads();
@@ -399,6 +467,7 @@
       const active = view.open && this.initial.format === 'html';
       if (this.interactions.active !== active) this.interactions.setActive(active);
       if (this.interactions.selecting !== view.selecting) this.interactions.setSelecting(view.selecting);
+      this.interactions.setComposerPosition(attachedDraft?.position || null);
       const pins = visible.flatMap(thread => thread.comments.slice(0, 1)).filter(comment => comment.xpath && data.comments.has(comment.id));
       const projection = JSON.stringify(pins.map(({ threadId, threadNumber, xpath, relativeX, relativeY }) => ({ threadId, threadNumber, xpath, relativeX, relativeY })));
       if (this.pins !== projection) { this.pins = projection; this.interactions.setThreads(pins); }

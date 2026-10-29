@@ -59,6 +59,7 @@
   <main id="content" th:hidden="${!CAN_VIEW}"><iframe id="artifact-frame" th:attr="data-testid=${FRAME_ID}" th:title="${TITLE}" th:src="${WRAPPER_URL}" sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer"></iframe></main>
   <div class="artifact-annotations" id="artifact-annotations" hidden>
     <div class="attached-composer" id="attached-composer" hidden>
+      <button class="comment-drag-handle" id="attached-comment-drag" type="button" th:attr="data-testid=${COMMENT_DRAG_ID}" aria-label="Move comment popup" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home" title="Drag to move. Arrow keys move; Home resets."><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></g></svg></button>
       <comment-composer id="attached-comment-composer" th:attr="data-body-testid=${COMMENT_BODY_ID},data-post-testid=${COMMENT_POST_ID},data-cancel-testid=${COMMENT_CANCEL_ID}" hidden></comment-composer>
     </div>
   </div>

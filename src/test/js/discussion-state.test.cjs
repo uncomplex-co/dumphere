@@ -237,3 +237,59 @@ test('a local write and subsequent timestamp normalization do not trigger unread
   await state.refresh();
   assert.equal(state.view.unread, false);
 });
+
+test('moving an attached composer preserves its anchor and draft across polling, and resets for a new draft', async () => {
+  const { state, snapshot } = await setup([comment(1)]);
+  const anchor = { xpath: '/html/body/p', relativeX: 0.25, relativeY: 0.75 };
+  state.compose('attached', { mode: 'new', anchor });
+  state.draft('attached', 'Feedback on this exact element');
+  state.moveAttached({ x: 140, y: 180 });
+  snapshot([comment(1), comment(2)]);
+  await state.refresh();
+  const draft = state.view.composers.get('attached');
+  assert.deepEqual(draft.position, { x: 140, y: 180 });
+  assert.deepEqual(draft.anchor, anchor);
+  assert.equal(draft.body, 'Feedback on this exact element');
+  state.moveAttached(null);
+  assert.equal(draft.position, null);
+  assert.deepEqual(draft.anchor, anchor);
+  state.cancel('attached');
+  state.compose('attached', { mode: 'new', anchor: { xpath: '/html/body/h1', relativeX: 0.5, relativeY: 0.5 } });
+  assert.equal(state.view.composers.get('attached').position, undefined);
+  assert.equal(state.view.drag, null);
+});
+
+test('closing the panel discards all creation drafts and their popup position', async () => {
+  const { state } = await setup([comment(1)]);
+  state.change({ open: true });
+  state.compose('new', { mode: 'new' });
+  state.compose('reply:1', { mode: 'reply', threadId: 1 });
+  state.compose('attached', { mode: 'new', anchor: { xpath: '/html/body/p', relativeX: 0.5, relativeY: 0.5 } });
+  for (const key of ['new', 'reply:1', 'attached']) state.draft(key, 'Discard on close');
+  state.moveAttached({ x: 140, y: 180 });
+  state.close();
+  assert.equal(state.view.open, false);
+  assert.equal(state.view.composers.size, 0);
+  assert.equal(state.view.drag, null);
+  assert.equal(state.view.selecting, false);
+  state.change({ open: true });
+  assert.equal(state.view.composers.size, 0);
+});
+
+test('an already submitted comment may finish after closing without clearing a newly opened draft', async () => {
+  const { state, api } = await setup([]);
+  const saved = deferred();
+  api.save = () => saved.promise;
+  state.change({ open: true });
+  state.compose('new', { mode: 'new' });
+  state.draft('new', 'Already submitted');
+  const writing = state.submit('new');
+  state.close();
+  state.change({ open: true });
+  state.compose('new', { mode: 'new' });
+  state.draft('new', 'A different draft');
+  saved.resolve(comment(1, 1, { body: 'Already submitted' }));
+  assert.equal(await writing, true);
+  assert.equal(state.data.comments.get(1).body, 'Already submitted');
+  assert.equal(state.view.composers.get('new').body, 'A different draft');
+});
