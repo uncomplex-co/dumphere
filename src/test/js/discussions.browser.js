@@ -1,4 +1,4 @@
-// Run in an authenticated browser on a disposable HTML artifact using DevTools evaluate_script (format: script).
+// Run in an authenticated browser on a disposable HTML or Markdown artifact using DevTools evaluate_script (format: script).
 // Exercises production rendering, timers and HTTP endpoints. Creates and soft-deletes only its own test threads.
 (async () => {
   const $ = id => document.getElementById(id);
@@ -14,6 +14,7 @@
     });
   };
   const id = document.body.dataset.id;
+  assert(!$('element-selection').hidden, 'Rendered-document element selection is unavailable');
   const csrf = document.body.dataset.csrf;
   const request = async (path, method, body) => {
     const response = await fetch('/p/' + id + path, {
@@ -178,6 +179,13 @@
   assert(saved.xpath.endsWith('/p[1]') && Math.abs(saved.relativeX - 0.5) < 0.01, 'Moving the popup changed the comment anchor');
   await wait(() => wrapper.querySelector('[data-thread-id="' + anchoredThread + '"]'), 'Pin projection did not follow local comment data', wrapper.documentElement);
   assert(!anchored().querySelector('.comment-thread-number').hidden, 'Anchored comment lost its server-assigned number');
+  const pinTestid = wrapper.getElementById('artifact-annotations').dataset.pinTestid;
+  const pin = () => wrapper.querySelector('[data-testid="' + pinTestid + '"][data-thread-id="' + anchoredThread + '"]');
+  pin().click();
+  assert(anchored().closest('.comment-thread').classList.contains('is-selected'), 'Pin did not select its discussion thread');
+  $('comments-close').click();
+  $('comments-toggle').click();
+  await wait(() => pin() && !pin().hidden, 'Reopening did not restore the persisted pin', wrapper.documentElement);
   await request('/comments/' + anchoredId, 'DELETE');
   await request('/comments/' + whileMoving.id, 'DELETE');
   await wait(() => !anchored(), 'Deleted anchored comment did not disappear');

@@ -1,5 +1,5 @@
 // Isolated browser-test fixture: production templates/assets, in-memory HTTP responses, no real credentials or data.
-// Run: node src/test/js/browser-server.cjs, then open http://localhost:7335 and evaluate discussions.browser.js.
+// Run: [ARTIFACT_FORMAT=markdown] node src/test/js/browser-server.cjs, then evaluate discussions.browser.js at http://localhost:7335.
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -7,8 +7,9 @@ const resources = path.resolve(__dirname, '../../main/resources');
 const viewerSource = fs.readFileSync(path.resolve(__dirname, '../../main/kotlin/dev/uncomplex/dumphere/adapters/api/ArtifactViewer.kt'), 'utf8');
 const constants = Object.fromEntries([...viewerSource.matchAll(/const val (\w+) = "([^"]+)"/g)].map(match => [match[1], match[2]]));
 const values = Object.fromEntries([...viewerSource.matchAll(/"(\w+)" to ArtifactViewerIds\.(\w+)/g)].map(match => [match[1], constants[match[2]]]));
+const format = process.env.ARTIFACT_FORMAT || 'html';
 Object.assign(values, {
-  TITLE: 'Discussion browser regression', ID: 'browser-fixture', FORMAT: 'html', FORMAT_LABEL: 'HTML',
+  TITLE: 'Discussion browser regression', ID: 'browser-fixture', FORMAT: format, FORMAT_LABEL: format === 'markdown' ? 'Markdown' : 'HTML',
   VISIBILITY: 'internal', PUBLIC_UNTIL: '', VERSION: 1, CAN_VIEW: true, CAN_MANAGE: true,
   NAME: 'Browser tester', EMAIL: 'browser@example.test', INITIALS: 'BT', PICTURE: '', HAS_PICTURE: false,
   WRAPPER_URL: '/p/browser-fixture/wrapper', CONTENT_URL: '/p/browser-fixture/content', CSRF: 'browser-fixture'
@@ -35,7 +36,11 @@ const server = http.createServer(async (request, response) => {
   }
   if (url.pathname === '/' || url.pathname.endsWith('/wrapper') || url.pathname.endsWith('/content')) {
     response.writeHead(200, { 'Content-Type': 'text/html' });
-    return response.end(url.pathname.endsWith('/content') ? '<h1>Browser fixture</h1><p>Artifact content for anchored comments.</p>'
+    // Rendered-document fixture only. Actual Markdown conversion is covered by backend integration tests.
+    const content = format === 'markdown'
+      ? '<main><h1 id="browser-fixture">Browser fixture</h1><p>Artifact content for <strong>anchored comments</strong>.</p><ul><li>Review item</li></ul><table><tbody><tr><td>Review cell</td></tr></tbody></table><pre><code>const ready = true;</code></pre></main>'
+      : '<h1>Browser fixture</h1><p>Artifact content for anchored comments.</p>';
+    return response.end(url.pathname.endsWith('/content') ? content
       : template(url.pathname.endsWith('/wrapper') ? 'artifact-wrapper.html' : 'artifact-viewer.html'));
   }
   if (url.pathname.endsWith('/status')) return send({ artifact: { visibility: { visibility: 'internal', publicUntil: null }, version: 1, live: false }, canManage: true });

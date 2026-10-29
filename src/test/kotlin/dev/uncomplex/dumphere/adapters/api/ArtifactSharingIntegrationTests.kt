@@ -521,6 +521,43 @@ class ArtifactSharingIntegrationTests {
     }
 
     @Test
+    fun `Markdown discussions persist rendered element anchors without modifying source`() {
+        val source = "# Review\n\nPlease review **this paragraph**."
+        val id = publish(source, "review.md", "text/markdown")
+        val xpath = "/html[1]/body[1]/main[1]/p[1]/strong[1]"
+
+        val created = json.readTree(
+            mvc.perform(
+                post("/p/$id/comments").with(member()).with(csrf())
+                    .contentType("application/json")
+                    .content(json.writeValueAsString(mapOf(
+                        "body" to "Feedback on bold text", "version" to 1,
+                        "xpath" to xpath, "relativeX" to 0.25, "relativeY" to 0.75,
+                    ))),
+            ).andExpect(status().isCreated).andReturn().response.contentAsString,
+        )
+
+        val listed = json.readTree(
+            mvc.perform(get("/p/$id/comments").with(member()))
+                .andExpect(status().isOk).andReturn().response.contentAsString,
+        ).single()
+        assertEquals(created.path("id").asLong(), listed.path("id").asLong())
+        assertEquals(xpath, listed.path("xpath").asString())
+        assertEquals(0.25, listed.path("relativeX").asDouble())
+        assertEquals(0.75, listed.path("relativeY").asDouble())
+        assertEquals(
+            source,
+            mvc.perform(get("/p/$id/download").with(member()))
+                .andExpect(status().isOk).andReturn().response.contentAsString,
+        )
+        assertContains(
+            mvc.perform(get("/p/$id/content").with(member()))
+                .andExpect(status().isOk).andReturn().response.contentAsString,
+            "<p>Please review <strong>this paragraph</strong>.</p>",
+        )
+    }
+
+    @Test
     fun `attached threads retain XPath and relative coordinates across updates without changing artifact HTML`() {
         val html = "<html><body><section><h1>Attach here</h1></section></body></html>"
         val id = publish(html)

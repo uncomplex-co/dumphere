@@ -464,7 +464,7 @@
       text($('comments-status'), view.error || (view.loading && empty ? 'Loading comments...' : !visible.length && !empty ? 'No open discussions.' : ''));
       set($('comments-retry'), 'hidden', !view.error);
       this.renderDeletion();
-      const active = view.open && this.initial.format === 'html';
+      const active = view.open;
       if (this.interactions.active !== active) this.interactions.setActive(active);
       if (this.interactions.selecting !== view.selecting) this.interactions.setSelecting(view.selecting);
       this.interactions.setComposerPosition(attachedDraft?.position || null);
