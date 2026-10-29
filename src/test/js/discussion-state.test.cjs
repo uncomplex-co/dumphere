@@ -174,15 +174,34 @@ test('thread-local writes are ordered so a late reply cannot resurrect a deleted
   assert.equal(state.view.deletion, null);
 });
 
-test('background refresh preserves existing thread order during composition, then reorders after cancellation', async () => {
+test('a remote reply does not move an older thread after draft cancellation', async () => {
   const { state, snapshot } = await setup([comment(1), comment(2)]);
-  assert.deepEqual(state.view.order, [2, 1]);
   state.compose('reply:2', { mode: 'reply', threadId: 2 });
   snapshot([comment(1), comment(2), comment(3, 1)]);
   await state.refresh();
-  assert.deepEqual(state.view.order, [2, 1]);
   state.cancel('reply:2');
-  assert.deepEqual(state.view.order, [1, 2]);
+
+  assert.deepEqual(state.visibleThreads().map(thread => thread.id), [2, 1]);
+});
+
+test('remote edits do not change thread creation order', async () => {
+  const { state, snapshot } = await setup([comment(1), comment(2)]);
+  snapshot([comment(2), comment(1, 1, { body: 'Edited', editedAt: '2026-10-29T13:00:00Z' })]);
+
+  await state.refresh();
+
+  assert.deepEqual(state.visibleThreads().map(thread => thread.id), [2, 1]);
+});
+
+test('new threads appear first while replies remain chronological within their thread', async () => {
+  const { state, snapshot } = await setup([comment(1), comment(2)]);
+  snapshot([comment(4, 1), comment(2), comment(3), comment(1)]);
+
+  await state.refresh();
+
+  assert.deepEqual(state.visibleThreads().map(thread => [thread.id, thread.comments.map(comment => comment.id)]), [
+    [3, [3]], [2, [2]], [1, [1, 4]]
+  ]);
 });
 
 test('the first snapshot establishes a baseline and unchanged snapshots do not produce unread notifications', async () => {

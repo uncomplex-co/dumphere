@@ -6,7 +6,7 @@ class DiscussionState {
     this.view = {
       open: false, showResolved: false, selectedThreadId: null, selecting: false, menuId: null,
       canView: true, canManage: false, version: 1, loading: false, error: '', unread: false,
-      composers: new Map(), deletion: null, attached: new Set(), order: [], resolutions: new Set(), drag: null
+      composers: new Map(), deletion: null, attached: new Set(), resolutions: new Set(), drag: null
     };
     this.listeners = new Set();
     this.generation = 0;
@@ -255,10 +255,9 @@ class DiscussionState {
     }
     const groups = new Map();
     for (const comment of records.values()) {
-      if (!groups.has(comment.threadId)) groups.set(comment.threadId, { id: comment.threadId, comments: [], latest: '', resolvedAt: comment.resolvedAt });
+      if (!groups.has(comment.threadId)) groups.set(comment.threadId, { id: comment.threadId, comments: [], resolvedAt: comment.resolvedAt });
       const thread = groups.get(comment.threadId);
       thread.comments.push(comment);
-      if (!thread.latest || Date.parse(comment.createdAt) > Date.parse(thread.latest)) thread.latest = comment.createdAt;
     }
     const threads = [...groups.values()];
     for (const thread of threads) {
@@ -267,23 +266,15 @@ class DiscussionState {
       const draft = [...this.view.composers.values()].find(composer => composer.threadId === thread.id);
       thread.displayResolved = draft ? draft.context[0]?.resolvedAt : thread.resolvedAt;
     }
-    return threads.sort((a, b) => Date.parse(b.latest) - Date.parse(a.latest) || b.id - a.id);
+    return threads.sort((a, b) => b.id - a.id);
   }
 
   visibleThreads() {
-    const threads = this.threads().filter(thread => this.view.showResolved || !thread.resolvedAt || thread.hasDraft);
-    const byId = new Map(threads.map(thread => [thread.id, thread]));
-    return this.view.order.map(id => byId.get(id)).filter(Boolean);
+    return this.threads().filter(thread => this.view.showResolved || !thread.resolvedAt || thread.hasDraft);
   }
 
   emit() {
     const threads = this.threads();
-    if (this.view.composers.size) {
-      // Do not reorder an existing conversation out from under an editor.
-      const ids = new Set(threads.map(thread => thread.id));
-      this.view.order = this.view.order.filter(id => ids.has(id));
-      for (const thread of threads) if (!this.view.order.includes(thread.id)) this.view.order.push(thread.id);
-    } else this.view.order = threads.map(thread => thread.id);
     if (this.view.deletion && !this.data.comments.has(this.view.deletion.commentId) && !this.view.deletion.pending) this.view.deletion = null;
     if (!this.data.comments.has(this.view.menuId)) this.view.menuId = null;
     if (!threads.some(thread => thread.id === this.view.selectedThreadId)) this.view.selectedThreadId = null;
