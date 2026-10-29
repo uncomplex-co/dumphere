@@ -1,10 +1,10 @@
 package dev.uncomplex.dumphere.adapters.api
 
-import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PageContentRenderer
 import dev.uncomplex.dumphere.application.PublishedPage
+import dev.uncomplex.dumphere.application.SamePageAppProperties
 import dev.uncomplex.dumphere.application.authenticatedUser
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.CacheControl
@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets.UTF_8
 class HtmlPageController(
     private val store: HtmlPageStore,
     private val renderer: PageContentRenderer,
-    private val properties: DumpHereApplicationProperties,
+    private val properties: SamePageAppProperties,
     private val access: ArtifactAccess,
     private val viewer: ArtifactViewer,
 ) {

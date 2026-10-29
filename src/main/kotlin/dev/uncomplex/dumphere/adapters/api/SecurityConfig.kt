@@ -2,8 +2,8 @@ package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.adapters.mcp.OAuthMetadataEntryPoint
 import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
-import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.application.SamePageAppProperties
 import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.authenticatedUser
 import jakarta.servlet.http.HttpServletRequest
@@ -15,7 +15,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.security.authentication.AnonymousAuthenticationToken
 import org.springframework.security.authorization.AuthorizationDecision
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
-import org.springframework.security.core.Authentication
 import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.authority.FactorGrantedAuthority
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper
@@ -39,7 +38,7 @@ import kotlin.collections.plus
 
 @Configuration
 class SecurityConfig(
-    private val properties: DumpHereApplicationProperties,
+    private val properties: SamePageAppProperties,
     private val clientRegistrationRepository: ClientRegistrationRepository,
     private val allowedEmailDomainPolicy: AllowedEmailDomainPolicy,
     private val userProvisioning: UserProvisioningService,
@@ -140,8 +139,14 @@ class SecurityConfig(
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/consent"))
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/status"))
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments"))
-                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments/{commentId}"))
-                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/threads/{threadId}/resolution"))
+                exceptions.defaultAuthenticationEntryPointFor(
+                    HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                    matcher("/p/{id}/comments/{commentId}"),
+                )
+                exceptions.defaultAuthenticationEntryPointFor(
+                    HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                    matcher("/p/{id}/threads/{threadId}/resolution"),
+                )
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/account/artifacts"))
                 exceptions.defaultAuthenticationEntryPointFor(
                     HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),

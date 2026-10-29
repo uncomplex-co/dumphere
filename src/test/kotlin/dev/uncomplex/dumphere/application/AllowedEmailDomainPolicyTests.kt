@@ -42,7 +42,7 @@ class AllowedEmailDomainPolicyTests {
 
     private fun policy(domain: String) =
         AllowedEmailDomainPolicy(
-            DumpHereApplicationProperties(
+            SamePageAppProperties(
                 publicBaseUrl = "http://localhost:7331",
                 maxHtmlBytes = 1024,
                 allowedEmailDomain = domain,

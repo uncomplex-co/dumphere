@@ -1,7 +1,7 @@
 package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
-import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
+import dev.uncomplex.dumphere.application.SamePageAppProperties
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.authentication.TestingAuthenticationToken
@@ -72,7 +72,7 @@ class LoginControllerTests {
 
     private fun policy(domain: String = "example.com") =
         AllowedEmailDomainPolicy(
-            DumpHereApplicationProperties(
+            SamePageAppProperties(
                 publicBaseUrl = "http://localhost:7331",
                 maxHtmlBytes = 1024,
                 allowedEmailDomain = domain,

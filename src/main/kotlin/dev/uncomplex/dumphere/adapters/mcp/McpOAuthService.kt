@@ -1,7 +1,7 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
 import dev.uncomplex.dumphere.application.AuthenticatedUser
-import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
+import dev.uncomplex.dumphere.application.SamePageAppProperties
 import dev.uncomplex.dumphere.ports.UserRepository
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -69,7 +69,7 @@ class McpOAuthService(
     private val clients: RegisteredClientRepository,
     private val passwordEncoder: PasswordEncoder,
     private val jwtEncoder: JwtEncoder,
-    private val properties: DumpHereApplicationProperties,
+    private val properties: SamePageAppProperties,
     private val refreshTokens: JdbcMcpRefreshTokens,
     private val users: UserRepository,
 ) {
@@ -176,8 +176,9 @@ class McpOAuthService(
             throw OAuthTokenException("invalid_grant", "code_verifier does not match code_challenge")
         }
 
-        val user = users.findBySubject(stored.user.subject)
-            ?: throw OAuthTokenException("invalid_grant", "User no longer exists")
+        val user =
+            users.findBySubject(stored.user.subject)
+                ?: throw OAuthTokenException("invalid_grant", "User no longer exists")
         val now = Instant.now()
         val token =
             jwtEncoder.encode(

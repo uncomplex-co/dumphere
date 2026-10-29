@@ -6,8 +6,8 @@ import dev.uncomplex.dumphere.ports.UserRepository
 import org.springframework.data.jdbc.core.JdbcAggregateTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import tools.jackson.databind.ObjectMapper
 import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.ObjectMapper
 import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
 import java.time.Duration
@@ -17,7 +17,7 @@ import java.util.Base64
 
 @Service
 class HtmlPageStore(
-    private val properties: DumpHereApplicationProperties,
+    private val properties: SamePageAppProperties,
     private val objectMapper: ObjectMapper,
     private val pages: HtmlPageRepository,
     private val versions: HtmlPageVersionRepository,
@@ -173,7 +173,12 @@ class HtmlPageStore(
     }
 
     @Transactional
-    fun setCustomMetadata(id: String, key: String, value: Any?, updatedBy: AuthenticatedUser?): PublishedPage? {
+    fun setCustomMetadata(
+        id: String,
+        key: String,
+        value: Any?,
+        updatedBy: AuthenticatedUser?,
+    ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
         val existing = pages.findByIdForUpdate(id) ?: return null
         val metadata = readCustomMetadata(id).toMutableMap()
@@ -235,9 +240,10 @@ class HtmlPageStore(
             customMetadata = readCustomMetadata(id),
         )
 
-    private fun author(userId: Long?): ArtifactAuthor? = userId?.let { id ->
-        users.findById(id).orElse(null)?.let { ArtifactAuthor(it.email, it.displayName) }
-    }
+    private fun author(userId: Long?): ArtifactAuthor? =
+        userId?.let { id ->
+            users.findById(id).orElse(null)?.let { ArtifactAuthor(it.email, it.displayName) }
+        }
 
     private fun newId(): String {
         val bytes = ByteArray(18)

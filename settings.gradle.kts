@@ -1,1 +1,1 @@
-rootProject.name = "htmlshare"
+rootProject.name = "SamePage"

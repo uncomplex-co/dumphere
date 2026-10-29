@@ -1,7 +1,7 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
 import dev.uncomplex.dumphere.application.AuthenticatedUser
-import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
+import dev.uncomplex.dumphere.application.SamePageAppProperties
 import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.ports.UserRepository
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
@@ -31,8 +31,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @SpringBootTest(
     properties = [
@@ -51,10 +51,12 @@ class McpOAuthServiceTests {
 
     @Autowired private lateinit var encoder: JwtEncoder
 
-    @Autowired private lateinit var properties: DumpHereApplicationProperties
+    @Autowired private lateinit var properties: SamePageAppProperties
 
     @Autowired private lateinit var jdbc: JdbcTemplate
+
     @Autowired private lateinit var users: UserRepository
+
     @Autowired private lateinit var provisioning: UserProvisioningService
 
     companion object {
@@ -184,7 +186,10 @@ class McpOAuthServiceTests {
         val error = assertFailsWith<OAuthTokenException> { issue(AuthenticatedUser(subject), provisionUser = false) }
         assertEquals("invalid_grant", error.error)
         assertNull(users.findBySubject(subject))
-        assertEquals(before, jdbc.queryForObject("select count(*) from mcp_refresh_tokens where expires_at > current_timestamp", Int::class.java))
+        assertEquals(
+            before,
+            jdbc.queryForObject("select count(*) from mcp_refresh_tokens where expires_at > current_timestamp", Int::class.java),
+        )
     }
 
     @Test
@@ -192,10 +197,14 @@ class McpOAuthServiceTests {
         val subject = UUID.randomUUID().toString()
         val (client, access) = issue(AuthenticatedUser(subject))
         val userId = requireNotNull(users.findBySubject(subject)?.id)
-        assertEquals(userId, jdbc.queryForObject("select user_id from mcp_refresh_tokens where token_hash = ?", Long::class.java, hash(access.refreshToken)))
+        assertEquals(
+            userId,
+            jdbc.queryForObject("select user_id from mcp_refresh_tokens where token_hash = ?", Long::class.java, hash(access.refreshToken)),
+        )
         users.deleteById(userId)
         assertEquals(0, jdbc.queryForObject("select count(*) from mcp_refresh_tokens where user_id = ?", Int::class.java, userId))
-        val error = assertFailsWith<OAuthTokenException> { service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret") }
+        val error =
+            assertFailsWith<OAuthTokenException> { service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret") }
         assertEquals("invalid_grant", error.error)
     }
 
@@ -208,12 +217,20 @@ class McpOAuthServiceTests {
         val jwt = decoder.decode(refreshed.accessToken)
         assertEquals("new@example.com", jwt.getClaimAsString("email"))
         assertEquals("New Name", jwt.getClaimAsString("name"))
-        assertEquals(requireNotNull(users.findBySubject(subject)?.id), jdbc.queryForObject(
-            "select user_id from mcp_refresh_tokens where token_hash = ?", Long::class.java, hash(refreshed.refreshToken),
-        ))
+        assertEquals(
+            requireNotNull(users.findBySubject(subject)?.id),
+            jdbc.queryForObject(
+                "select user_id from mcp_refresh_tokens where token_hash = ?",
+                Long::class.java,
+                hash(refreshed.refreshToken),
+            ),
+        )
     }
 
-    private fun issue(user: AuthenticatedUser, provisionUser: Boolean = true): Pair<RegisteredClient, McpTokenResult> {
+    private fun issue(
+        user: AuthenticatedUser,
+        provisionUser: Boolean = true,
+    ): Pair<RegisteredClient, McpTokenResult> {
         if (provisionUser) provisioning.provision(user)
         val id = UUID.randomUUID().toString()
         val client =

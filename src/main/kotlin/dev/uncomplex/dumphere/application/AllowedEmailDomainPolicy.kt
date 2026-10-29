@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service
 
 @Service
 class AllowedEmailDomainPolicy(
-    private val properties: DumpHereApplicationProperties,
+    private val properties: SamePageAppProperties,
 ) {
     fun isAllowed(authentication: Authentication?): Boolean = isAllowed(authentication.authenticatedUser())
 

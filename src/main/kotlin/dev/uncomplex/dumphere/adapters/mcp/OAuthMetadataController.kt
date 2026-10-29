@@ -1,13 +1,13 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
 import com.nimbusds.jose.jwk.JWKSet
-import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
+import dev.uncomplex.dumphere.application.SamePageAppProperties
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
 class OAuthMetadataController(
-    private val properties: DumpHereApplicationProperties,
+    private val properties: SamePageAppProperties,
     private val jwkSet: JWKSet,
 ) {
     @GetMapping("/.well-known/oauth-protected-resource")
