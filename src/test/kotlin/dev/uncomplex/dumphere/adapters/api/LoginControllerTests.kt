@@ -73,7 +73,6 @@ class LoginControllerTests {
     private fun policy(domain: String = "example.com") =
         AllowedEmailDomainPolicy(
             DumpHereApplicationProperties(
-                storageDir = "/tmp/htmlshare-test",
                 publicBaseUrl = "http://localhost:7331",
                 maxHtmlBytes = 1024,
                 allowedEmailDomain = domain,

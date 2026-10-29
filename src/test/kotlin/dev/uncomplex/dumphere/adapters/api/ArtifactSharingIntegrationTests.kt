@@ -1,7 +1,6 @@
 package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.AuthenticatedUser
-import dev.uncomplex.dumphere.application.DumpHereApplicationProperties
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
@@ -24,8 +23,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import tools.jackson.databind.ObjectMapper
 import java.net.URI
 import java.net.URLDecoder
-import java.nio.file.Files
-import java.nio.file.Path
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -59,56 +56,12 @@ class ArtifactSharingIntegrationTests {
 
     @Autowired private lateinit var jdbc: JdbcTemplate
 
-    @Autowired private lateinit var properties: DumpHereApplicationProperties
-
     @Autowired private lateinit var pages: HtmlPageStore
 
     companion object {
         @JvmStatic
         @DynamicPropertySource
         fun database(registry: DynamicPropertyRegistry) = PostgresTestDatabase.configure(registry)
-    }
-
-    @Test
-    fun legacyMetadataAndContentAreReadableWithDefaultKotlinFieldsAndJavaTime() {
-        val id = UUID.randomUUID().toString()
-        val directory = Files.createDirectories(Path.of(properties.storageDir))
-        val metadata = directory.resolve("$id.json")
-        val content = directory.resolve("$id.html")
-        val raw = "<h1>Legacy café</h1>"
-        Files.writeString(
-            metadata,
-            """{"id":"$id","title":"Legacy café","url":"http://localhost:7331/p/$id","createdAt":"2026-01-02T03:04:05Z","bytes":${raw.toByteArray().size},"isLive":true}""",
-        )
-        Files.writeString(content, raw)
-
-        try {
-            val response =
-                mvc
-                    .perform(get("/api/pages/$id").with(httpBasic("htmlshare", "htmlshare")))
-                    .andExpect(status().isOk)
-                    .andReturn()
-                    .response
-            val page = json.readTree(response.contentAsString)
-            assertEquals(id, page.path("id").asString())
-            assertEquals("2026-01-02T03:04:05Z", page.path("createdAt").asString())
-            assertEquals(1, page.path("version").asInt())
-            assertEquals("internal", page.path("visibility").path("visibility").asString())
-            assertTrue(page.required("live").booleanValue())
-            assertFalse(page.has("isLive"))
-
-            val download =
-                mvc
-                    .perform(get("/p/$id/download").with(member()))
-                    .andExpect(status().isOk)
-                    .andReturn()
-                    .response
-            assertTrue(raw.toByteArray().contentEquals(download.contentAsByteArray))
-            assertEquals(0, versionCount(id))
-        } finally {
-            Files.deleteIfExists(metadata)
-            Files.deleteIfExists(content)
-        }
     }
 
     @Test

@@ -43,7 +43,6 @@ class AllowedEmailDomainPolicyTests {
     private fun policy(domain: String) =
         AllowedEmailDomainPolicy(
             DumpHereApplicationProperties(
-                storageDir = "/tmp/htmlshare-test",
                 publicBaseUrl = "http://localhost:7331",
                 maxHtmlBytes = 1024,
                 allowedEmailDomain = domain,

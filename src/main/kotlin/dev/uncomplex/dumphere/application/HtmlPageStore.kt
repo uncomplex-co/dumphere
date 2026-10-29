@@ -9,15 +9,11 @@ import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
 import tools.jackson.core.type.TypeReference
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Path
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Base64
-import kotlin.io.path.exists
-import kotlin.io.path.inputStream
 
 @Service
 class HtmlPageStore(
@@ -30,7 +26,6 @@ class HtmlPageStore(
     private val users: UserRepository,
 ) {
     private val random = SecureRandom()
-    private val storageDir: Path = Path.of(properties.storageDir).toAbsolutePath().normalize()
 
     @Transactional
     fun publish(
@@ -69,11 +64,9 @@ class HtmlPageStore(
     fun readContents(id: String): String? {
         if (!id.matches(ID_PATTERN)) return null
 
-        val page = pages.findById(id).orElse(null) ?: return readLegacyHtml(id)
-        return versions.findByPageIdAndVersion(id, page.currentVersion)?.html ?: readLegacyHtml(id)
+        val page = pages.findById(id).orElse(null) ?: return null
+        return versions.findByPageIdAndVersion(id, page.currentVersion)?.html
     }
-
-    fun readHtml(id: String): String? = readContents(id)
 
     @Transactional
     fun update(
@@ -83,8 +76,8 @@ class HtmlPageStore(
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
-        val existingEntity = pages.findByIdForUpdate(id)
-        val existing = existingEntity?.toPublishedPage() ?: readLegacyMetadata(id) ?: return null
+        val existingEntity = pages.findByIdForUpdate(id) ?: return null
+        val existing = existingEntity.toPublishedPage()
         val bytes = contents.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty()) { "contents must not be empty" }
         require(bytes.size <= properties.maxHtmlBytes) {
@@ -101,7 +94,7 @@ class HtmlPageStore(
             )
 
         versions.save(page.toVersionEntity(contents, now, user?.id))
-        val updated = pages.save(page.toEntity(createdByUserId = existingEntity?.createdByUserId, updatedByUserId = user?.id))
+        val updated = pages.save(page.toEntity(createdByUserId = existingEntity.createdByUserId, updatedByUserId = user?.id))
 
         return updated.toPublishedPage()
     }
@@ -133,7 +126,7 @@ class HtmlPageStore(
     fun readMetadata(id: String): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
-        return pages.findById(id).map { it.toPublishedPage() }.orElseGet { readLegacyMetadata(id) }
+        return pages.findById(id).map { it.toPublishedPage() }.orElse(null)
     }
 
     @Transactional
@@ -246,29 +239,11 @@ class HtmlPageStore(
         users.findById(id).orElse(null)?.let { ArtifactAuthor(it.email, it.displayName) }
     }
 
-    private fun readLegacyHtml(id: String): String? {
-        val path = legacyHtmlPath(id)
-        if (!path.exists()) return null
-
-        return Files.readString(path, StandardCharsets.UTF_8)
-    }
-
-    private fun readLegacyMetadata(id: String): PublishedPage? {
-        val path = metadataPath(id)
-        if (!path.exists()) return null
-
-        return path.inputStream().use { objectMapper.readValue(it, PublishedPage::class.java) }
-    }
-
     private fun newId(): String {
         val bytes = ByteArray(18)
         random.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
-
-    private fun legacyHtmlPath(id: String) = storageDir.resolve("$id.html")
-
-    private fun metadataPath(id: String) = storageDir.resolve("$id.json")
 
     private companion object {
         val ID_PATTERN = Regex("[A-Za-z0-9_-]{16,64}")
