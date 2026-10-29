@@ -20,6 +20,9 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import tools.jackson.databind.ObjectMapper
 import java.sql.Timestamp
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -86,16 +89,16 @@ class ArtifactMcpIntegrationTests {
                 )
             val id = published.path("id").asString()
             assertTrue(id.isNotBlank())
-            assertEquals("internal", published.path("visibility").asString())
+            assertEquals("internal", published.path("visibility").path("visibility").asString())
             assertNull(deadline(id))
             assertEquals("# First", contents(id))
 
             val shared = client.metadata(client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "public")))
-            assertEquals("public", shared.path("visibility").asString())
+            assertEquals("public", shared.path("visibility").path("visibility").asString())
             val until = assertNotNull(deadline(id))
-            assertEquals(until, Instant.parse(shared.path("publicUntil").asString()))
+            assertEquals(until, Instant.parse(shared.path("visibility").path("publicUntil").asString()))
             val inspected = client.metadata(client.call("get_artifact_metadata", mapOf("id" to id)))
-            assertEquals("public", inspected.path("visibility").asString())
+            assertEquals("public", inspected.path("visibility").path("visibility").asString())
             assertEquals(published.path("url").asString(), inspected.path("url").asString())
             assertEquals(until, deadline(id))
             client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "public"))
@@ -111,18 +114,18 @@ class ArtifactMcpIntegrationTests {
             val read = client.call("read_file_contents", mapOf("id" to id))
             assertContains(read.toString(), "# Third")
             val live = client.metadata(client.call("enable_live_reload", mapOf("id" to id, "live" to true)))
-            assertEquals("public", live.path("visibility").asString())
+            assertEquals("public", live.path("visibility").path("visibility").asString())
             assertEquals(true, jdbc.queryForObject("select is_live from html_pages where id = ?", Boolean::class.java, id))
             assertEquals(until, deadline(id))
 
             jdbc.update("update html_pages set public_until = ? where id = ?", Timestamp.from(Instant.now().minusSeconds(1)), id)
             val expired = client.metadata(client.call("get_artifact_metadata", mapOf("id" to id)))
-            assertEquals("internal", expired.path("visibility").asString())
+            assertEquals("internal", expired.path("visibility").path("visibility").asString())
             val reshared = client.metadata(client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "public")))
-            assertEquals("public", reshared.path("visibility").asString())
+            assertEquals("public", reshared.path("visibility").path("visibility").asString())
             assertTrue(assertNotNull(deadline(id)).isAfter(until))
             val revoked = client.metadata(client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "internal")))
-            assertEquals("internal", revoked.path("visibility").asString())
+            assertEquals("internal", revoked.path("visibility").path("visibility").asString())
             assertNull(deadline(id))
             assertEquals(3, jdbc.queryForObject("select count(*) from html_page_versions where page_id = ?", Int::class.java, id))
             assertEquals(
@@ -291,6 +294,147 @@ class ArtifactMcpIntegrationTests {
             assertEquals(3, jdbc.queryForObject("select count(*) from comments where thread_id = ? and deleted_at is not null", Int::class.java, thread))
             assertNotNull(jdbc.queryForObject("select deleted_at from comment_threads where id = ?", Timestamp::class.java, thread))
             assertEquals("Final first topic", jdbc.queryForObject("select body from comments where id = ?", String::class.java, first.path("id").asLong()))
+        }
+    }
+
+    @Test
+    fun customMetadataPreservesTypesSupportsSingleKeyUpdatesAndRemovalWithoutChangingArtifactVersions() {
+        val token = jwtEncoder.encode(JwtEncoderParameters.from(
+            JwtClaimsSet.builder().subject("metadata-agent").claim("email", "metadata@example.com")
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(120)).build(),
+        )).tokenValue
+        McpTestClient(port, token, json).use { client ->
+            client.initialize()
+            val schema = client.listTools().asArray().values().single { it.path("name").asString() == "set_artifact_metadata" }.path("inputSchema")
+            assertEquals(setOf("id", "key", "value"), schema.path("required").asArray().values().map { it.asString() }.toSet())
+            assertTrue(schema.path("properties").has("value"))
+            assertTrue(schema.path("properties").path("value").path("type").asString() != "object", "Metadata value schema must allow scalar values and null: $schema")
+            val published = client.metadata(client.call("publish_html", mapOf("contents" to "<h1>Metadata</h1>", "format" to "html")))
+            val id = published.path("id").asString()
+            val empty = client.metadata(client.call("get_artifact_metadata", mapOf("id" to id))).path("customMetadata")
+            assertTrue(empty.isObject)
+            assertEquals(0, empty.size())
+            fun set(key: String, value: Any?) = client.metadata(client.call("set_artifact_metadata", mapOf("id" to id, "key" to key, "value" to value)))
+            fun stored() = json.readTree(jdbc.queryForObject("select custom_metadata::text from html_pages where id = ?", String::class.java, id))
+
+            val text = set("ticket", "123")
+            assertEquals("123", text.path("customMetadata").path("ticket").asString())
+            assertTrue(stored().path("ticket").isString)
+            val number = set("ticket", 123)
+            assertTrue(number.path("customMetadata").path("ticket").isNumber)
+            assertEquals(123, stored().path("ticket").asInt())
+            val decimal = set("score", 1.25)
+            assertEquals(1.25, decimal.path("customMetadata").path("score").asDouble())
+            assertTrue(stored().path("score").isNumber)
+            val flag = set("reviewed", false)
+            assertEquals(false, flag.path("customMetadata").path("reviewed").asBoolean())
+            assertTrue(stored().has("reviewed"))
+            set("project.path[0]", "Literal key")
+            assertEquals("Literal key", stored().path("project.path[0]").asString())
+            set("title", "Custom title")
+            set("empty", "")
+            assertEquals("", stored().path("empty").asString())
+            val structured = set("details", mapOf("labels" to listOf("one", "two"), "optional" to null))
+            assertTrue(structured.path("customMetadata").path("details").path("labels").isArray)
+            assertTrue(stored().path("details").has("optional"))
+            assertTrue(stored().path("details").path("optional").isNull)
+            val deleted = set("ticket", null)
+            assertTrue(deleted.path("customMetadata").isObject)
+            assertTrue(!deleted.path("customMetadata").has("ticket"))
+            assertTrue(!stored().has("ticket"))
+            assertEquals(1.25, stored().path("score").asDouble())
+            set("absent", null)
+            client.call("set_artifact_metadata", mapOf("id" to id, "key" to "score"), expectError = true)
+            assertEquals(1.25, stored().path("score").asDouble())
+            client.call("set_artifact_metadata", mapOf("id" to id, "key" to "  ", "value" to "Invalid"), expectError = true)
+            client.call("set_artifact_metadata", mapOf("id" to "nonexistent_artifact_id", "key" to "ticket", "value" to 1), expectError = true)
+
+            client.call("update_html", mapOf("id" to id, "contents" to "<h1>Still here</h1>"))
+            client.call("enable_live_reload", mapOf("id" to id, "live" to true))
+            client.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "public"))
+            val inspected = client.metadata(client.call("get_artifact_metadata", mapOf("id" to id)))
+            assertEquals(stored(), inspected.path("customMetadata"))
+            assertEquals("Custom title", inspected.path("customMetadata").path("title").asString())
+            assertEquals(published.path("title"), inspected.path("title"))
+            assertEquals("<h1>Still here</h1>", contents(id))
+            assertEquals(2, jdbc.queryForObject("select current_version from html_pages where id = ?", Int::class.java, id))
+            assertEquals(2, jdbc.queryForObject("select count(*) from html_page_versions where page_id = ?", Int::class.java, id))
+            assertEquals("metadata-agent", jdbc.queryForObject(
+                "select u.subject from html_pages p join users u on u.id = p.updated_by_user_id where p.id = ?", String::class.java, id,
+            ))
+
+            val ready = CountDownLatch(4)
+            val start = CountDownLatch(1)
+            Executors.newFixedThreadPool(4).use { executor ->
+                val writes = (1..4).map { index -> executor.submit {
+                    McpTestClient(port, token, json).use { concurrent ->
+                        concurrent.initialize()
+                        ready.countDown()
+                        check(start.await(10, TimeUnit.SECONDS))
+                        val result = concurrent.metadata(concurrent.call("set_artifact_metadata",
+                            mapOf("id" to id, "key" to "concurrent-$index", "value" to index)))
+                        assertEquals(index, result.path("customMetadata").path("concurrent-$index").asInt())
+                    }
+                } }
+                check(ready.await(15, TimeUnit.SECONDS))
+                start.countDown()
+                writes.forEach { it.get(20, TimeUnit.SECONDS) }
+            }
+            val concurrentRead = client.metadata(client.call("get_artifact_metadata", mapOf("id" to id))).path("customMetadata")
+            assertTrue(concurrentRead.isObject)
+            assertEquals(stored(), concurrentRead)
+            for (index in 1..4) assertEquals(index, concurrentRead.path("concurrent-$index").asInt())
+            assertEquals("Custom title", concurrentRead.path("title").asString())
+            assertEquals(2, jdbc.queryForObject("select current_version from html_pages where id = ?", Int::class.java, id))
+        }
+    }
+
+    @Test
+    fun artifactMetadataReturnsCreatorAndUpdaterProfilesAndNestedVisibility() {
+        fun token(subject: String, email: String, name: String) = jwtEncoder.encode(JwtEncoderParameters.from(
+            JwtClaimsSet.builder().subject(subject).claim("email", email).claim("name", name)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(120)).build(),
+        )).tokenValue
+        McpTestClient(port, token("metadata-creator", "creator@example.com", "Original Creator"), json).use { creator ->
+            creator.initialize()
+            val published = creator.metadata(creator.call("publish_html", mapOf("contents" to "<p>Profiles</p>", "format" to "html")))
+            val id = published.path("id").asString()
+            val expectedCreator = json.readTree("""{"email":"creator@example.com","name":"Original Creator"}""")
+            assertEquals(expectedCreator, published.path("createdBy"))
+            assertTrue(published.path("updatedBy").isNull)
+            assertTrue(published.path("visibility").isObject)
+            assertEquals("internal", published.path("visibility").path("visibility").asString())
+            assertTrue(published.path("visibility").path("publicUntil").isNull)
+            assertTrue(!published.has("publicUntil"))
+            val read = creator.metadata(creator.call("get_artifact_metadata", mapOf("id" to id)))
+            assertEquals(expectedCreator, read.path("createdBy"))
+
+            McpTestClient(port, token("metadata-editor", "editor@example.com", "Different Editor"), json).use { editor ->
+                editor.initialize()
+                val expectedEditor = json.readTree("""{"email":"editor@example.com","name":"Different Editor"}""")
+                val updated = editor.metadata(editor.call("update_html", mapOf("id" to id, "contents" to "<p>Updated</p>")))
+                assertEquals(expectedCreator, updated.path("createdBy"))
+                assertEquals(expectedEditor, updated.path("updatedBy"))
+                val shared = editor.metadata(editor.call("set_artifact_visibility", mapOf("id" to id, "visibility" to "public")))
+                assertTrue(shared.path("visibility").isObject)
+                assertEquals("public", shared.path("visibility").path("visibility").asString())
+                assertEquals(deadline(id), Instant.parse(shared.path("visibility").path("publicUntil").asString()))
+                assertEquals(expectedCreator, shared.path("createdBy"))
+                assertEquals(expectedEditor, shared.path("updatedBy"))
+                val withCustomMetadata = editor.metadata(editor.call("set_artifact_metadata", mapOf("id" to id, "key" to "origin", "value" to "MCP")))
+                assertEquals(expectedCreator, withCustomMetadata.path("createdBy"))
+                assertEquals(expectedEditor, withCustomMetadata.path("updatedBy"))
+                assertEquals("metadata-creator", jdbc.queryForObject(
+                    "select u.subject from html_pages p join users u on u.id = p.created_by_user_id where p.id = ?", String::class.java, id,
+                ))
+                assertEquals("metadata-editor", jdbc.queryForObject(
+                    "select u.subject from html_pages p join users u on u.id = p.updated_by_user_id where p.id = ?", String::class.java, id,
+                ))
+                val reread = creator.metadata(creator.call("get_artifact_metadata", mapOf("id" to id)))
+                assertEquals(expectedCreator, reread.path("createdBy"))
+                assertEquals(expectedEditor, reread.path("updatedBy"))
+                assertEquals(shared.path("visibility"), reread.path("visibility"))
+            }
         }
     }
 

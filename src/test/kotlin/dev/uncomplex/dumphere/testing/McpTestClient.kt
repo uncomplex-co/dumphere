@@ -45,7 +45,7 @@ class McpTestClient(
 
     fun call(
         name: String,
-        arguments: Map<String, Any>,
+        arguments: Map<String, Any?>,
         expectError: Boolean = false,
     ): JsonNode {
         val response =
@@ -64,6 +64,16 @@ class McpTestClient(
         assertEquals(expectError, result.path("isError").asBoolean(), response.body())
         assertTrue(result.path("content").isArray, response.body())
         return result
+    }
+
+    fun listTools(): JsonNode {
+        val response = send(mapOf("jsonrpc" to "2.0", "id" to ++requestId, "method" to "tools/list"))
+        assertEquals(200, response.statusCode(), response.body())
+        val message = payload(response)
+        assertFalse(message.has("error"), response.body())
+        val tools = message.path("result").path("tools")
+        assertTrue(tools.isArray, response.body())
+        return tools
     }
 
     fun metadata(result: JsonNode): JsonNode {

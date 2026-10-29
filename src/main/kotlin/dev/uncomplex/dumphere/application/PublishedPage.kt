@@ -10,17 +10,22 @@ data class PublishedPage(
     val url: String,
     val contentFormat: PageContentFormat = PageContentFormat.HTML,
     val createdAt: Instant,
-    val createdBy: String? = null,
+    val createdBy: ArtifactAuthor? = null,
     val updatedAt: Instant? = null,
-    val updatedBy: String? = null,
+    val updatedBy: ArtifactAuthor? = null,
     val version: Int = 1,
     val bytes: Long,
     @get:JsonProperty("live")
     @param:JsonProperty("live")
     @param:JsonAlias("isLive")
     val isLive: Boolean = false,
-    val publicUntil: Instant? = null,
-) {
+    val visibility: ArtifactSharing = ArtifactSharing(),
+    val customMetadata: Map<String, Any> = emptyMap(),
+)
+
+data class ArtifactAuthor(val email: String?, val name: String?)
+
+data class ArtifactSharing(val publicUntil: Instant? = null) {
     val visibility: ArtifactVisibility
         get() = if (publicUntil?.isAfter(Instant.now()) == true) ArtifactVisibility.PUBLIC else ArtifactVisibility.INTERNAL
 }

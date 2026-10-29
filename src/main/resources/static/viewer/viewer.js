@@ -850,8 +850,8 @@
         ? 'Your session may have expired. Reload the page and sign in through your team login.'
         : 'Could not save sharing settings. Try again.');
       const artifact = await response.json();
-      visibility = artifact.visibility;
-      publicUntil = artifact.publicUntil;
+      visibility = artifact.visibility.visibility;
+      publicUntil = artifact.visibility.publicUntil;
       render();
       $('share-dialog').close();
       notify(visibility === 'public' ? 'Public access enabled for 30 days.' : 'Public access removed. Only the team can view.');
@@ -892,8 +892,8 @@
         return;
       }
       const artifact = status.artifact;
-      visibility = artifact.visibility;
-      publicUntil = artifact.publicUntil;
+      visibility = artifact.visibility.visibility;
+      publicUntil = artifact.visibility.publicUntil;
       canManage = status.canManage;
       if (artifact.live && artifact.version !== version) {
         $('artifact-frame').src = '/p/' + id + '/wrapper?v=' + artifact.version;

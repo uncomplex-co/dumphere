@@ -18,5 +18,5 @@ class ArtifactAccess(
     fun canView(
         page: PublishedPage,
         authentication: Authentication?,
-    ): Boolean = isMember(authentication) || page.visibility == ArtifactVisibility.PUBLIC
+    ): Boolean = isMember(authentication) || page.visibility.visibility == ArtifactVisibility.PUBLIC
 }

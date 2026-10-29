@@ -93,7 +93,7 @@ class ArtifactSharingIntegrationTests {
             assertEquals(id, page.path("id").asString())
             assertEquals("2026-01-02T03:04:05Z", page.path("createdAt").asString())
             assertEquals(1, page.path("version").asInt())
-            assertEquals("internal", page.path("visibility").asString())
+            assertEquals("internal", page.path("visibility").path("visibility").asString())
             assertTrue(page.required("live").booleanValue())
             assertFalse(page.has("isLive"))
 
@@ -178,7 +178,7 @@ class ArtifactSharingIntegrationTests {
         val before = Instant.now()
 
         val shared = setVisibility(id, "public")
-        assertEquals("public", shared.path("visibility").asString())
+        assertEquals("public", shared.path("visibility").path("visibility").asString())
         val until = assertNotNull(deadline(id))
         assertTrue(Duration.between(before, until).toHours() in 719..720)
         assertEquals(1, committedVersion(id))
@@ -327,7 +327,7 @@ class ArtifactSharingIntegrationTests {
                 ).andExpect(status().isOk)
                 .andReturn()
                 .response
-        assertEquals("internal", json.readTree(metadata.contentAsString).path("visibility").asString())
+        assertEquals("internal", json.readTree(metadata.contentAsString).path("visibility").path("visibility").asString())
         assertInternalRequiresLogin(id)
         assertTrue(assertNotNull(deadline(id)).isBefore(Instant.now()))
         mvc.perform(get("/p/$id/content").with(member())).andExpect(status().isOk)

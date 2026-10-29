@@ -25,11 +25,24 @@ class HtmlshareMcpTools(
 ) {
     @McpTool(
         name = "get_artifact_metadata",
-        description = "Read an artifact's metadata, effective visibility, and public access deadline without changing it",
+        description = "Read an artifact's metadata, including customMetadata key-value pairs, effective visibility, and public access deadline without changing it",
     )
     fun getArtifactMetadata(
         @McpToolParam(description = "Published artifact id", required = true) id: String,
     ): PublishedPage = requireNotNull(store.readMetadata(id)) { "page not found: $id" }
+
+    @McpTool(
+        name = "set_artifact_metadata",
+        description = "Set one custom metadata key on an artifact, preserving JSON value types. Pass null to remove that key. Other keys and artifact content are unchanged; no content version is created. Returns artifact metadata including customMetadata.",
+    )
+    fun setArtifactMetadata(
+        @McpToolParam(description = "Published artifact id", required = true) id: String,
+        @McpToolParam(description = "Non-blank custom metadata key (treated literally)", required = true) key: String,
+        @McpToolParam(description = "JSON value to store; null removes the key", required = true) value: Any?,
+    ): PublishedPage {
+        require(key.isNotBlank()) { "Metadata key must not be blank" }
+        return requireNotNull(store.setCustomMetadata(id, key, value, currentUser())) { "page not found: $id" }
+    }
 
     @McpTool(
         name = "set_artifact_visibility",

@@ -2,10 +2,12 @@ package dev.uncomplex.dumphere.application
 
 import dev.uncomplex.dumphere.ports.HtmlPageRepository
 import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
+import dev.uncomplex.dumphere.ports.UserRepository
 import org.springframework.data.jdbc.core.JdbcAggregateTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
+import tools.jackson.core.type.TypeReference
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -25,6 +27,7 @@ class HtmlPageStore(
     private val versions: HtmlPageVersionRepository,
     private val userProvisioning: UserProvisioningService,
     private val jdbcAggregateTemplate: JdbcAggregateTemplate,
+    private val users: UserRepository,
 ) {
     private val random = SecureRandom()
     private val storageDir: Path = Path.of(properties.storageDir).toAbsolutePath().normalize()
@@ -52,6 +55,7 @@ class HtmlPageStore(
                 url = "${properties.publicBaseUrl.trimEnd('/')}/p/$id",
                 contentFormat = contentFormat,
                 createdAt = now,
+                createdBy = user?.let { ArtifactAuthor(it.email, it.displayName) },
                 version = 1,
                 bytes = bytes.size.toLong(),
             )
@@ -97,9 +101,9 @@ class HtmlPageStore(
             )
 
         versions.save(page.toVersionEntity(contents, now, user?.id))
-        pages.save(page.toEntity(createdByUserId = existingEntity?.createdByUserId, updatedByUserId = user?.id))
+        val updated = pages.save(page.toEntity(createdByUserId = existingEntity?.createdByUserId, updatedByUserId = user?.id))
 
-        return page
+        return updated.toPublishedPage()
     }
 
     @Transactional
@@ -175,6 +179,21 @@ class HtmlPageStore(
         return updated.toPublishedPage()
     }
 
+    @Transactional
+    fun setCustomMetadata(id: String, key: String, value: Any?, updatedBy: AuthenticatedUser?): PublishedPage? {
+        if (!id.matches(ID_PATTERN)) return null
+        val existing = pages.findByIdForUpdate(id) ?: return null
+        val metadata = readCustomMetadata(id).toMutableMap()
+        if (value == null) metadata.remove(key) else metadata[key] = value
+        val user = updatedBy?.let(userProvisioning::provision)
+        val now = Instant.now()
+        pages.updateCustomMetadata(id, objectMapper.writeValueAsString(metadata), now, user?.id)
+        return existing.copy(updatedAt = now, updatedByUserId = user?.id).toPublishedPage()
+    }
+
+    private fun readCustomMetadata(id: String): Map<String, Any> =
+        objectMapper.readValue(requireNotNull(pages.readCustomMetadata(id)), object : TypeReference<Map<String, Any>>() {})
+
     private fun PublishedPage.toEntity(
         createdByUserId: Long? = null,
         updatedByUserId: Long? = null,
@@ -190,7 +209,7 @@ class HtmlPageStore(
         currentVersion = version,
         currentBytes = bytes,
         isLive = isLive,
-        publicUntil = publicUntil,
+        publicUntil = visibility.publicUntil,
     )
 
     private fun PublishedPage.toVersionEntity(
@@ -213,12 +232,19 @@ class HtmlPageStore(
             url = url,
             contentFormat = contentFormat,
             createdAt = createdAt,
+            createdBy = author(createdByUserId),
             updatedAt = updatedAt,
+            updatedBy = author(updatedByUserId),
             version = currentVersion,
             bytes = currentBytes,
             isLive = isLive,
-            publicUntil = publicUntil,
+            visibility = ArtifactSharing(publicUntil),
+            customMetadata = readCustomMetadata(id),
         )
+
+    private fun author(userId: Long?): ArtifactAuthor? = userId?.let { id ->
+        users.findById(id).orElse(null)?.let { ArtifactAuthor(it.email, it.displayName) }
+    }
 
     private fun readLegacyHtml(id: String): String? {
         val path = legacyHtmlPath(id)
