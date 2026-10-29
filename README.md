@@ -1,4 +1,4 @@
-# dumphere
+# SamePage
 
 AI-native artifact sharing for teams. Publish Markdown snippets, reports, and
 interactive HTML pages directly from AI agent sessions through MCP, then share

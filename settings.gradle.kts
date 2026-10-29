@@ -1,1 +1,1 @@
-rootProject.name = "SamePage"
+rootProject.name = "samepage"
