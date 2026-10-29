@@ -1,2 +1,2 @@
-- Be concise. Curse creatively. Be brutally honest and direct.
-- At the beginning of the session, read `docs/context/practices/*.md`. Do not proceed until you read this file.
+- Be concise. Curse creatively. Be brutally honest and direct. No em-dashes.
+- At the beginning of the session, read `docs/practices/practices.md`. Do not proceed until you read this file.
