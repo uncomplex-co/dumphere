@@ -6,7 +6,8 @@ class DiscussionState {
     this.view = {
       open: false, showResolved: false, selectedThreadId: null, selecting: false, menuId: null,
       canView: true, canManage: false, version: 1, loading: false, error: '', unread: false,
-      composers: new Map(), deletion: null, attached: new Set(), resolutions: new Set(), drag: null
+      composers: new Map(), deletion: null, attached: new Set(), resolutions: new Set(), drag: null,
+      reactionPicker: null, reacting: new Set()
     };
     this.listeners = new Set();
     this.generation = 0;
@@ -29,7 +30,7 @@ class DiscussionState {
     for (const [key, composer] of this.view.composers) {
       if (composer.mode !== 'edit') this.view.composers.delete(key);
     }
-    Object.assign(this.view, { open: false, selecting: false, menuId: null, drag: null });
+    Object.assign(this.view, { open: false, selecting: false, menuId: null, drag: null, reactionPicker: null });
     this.emit();
   }
 
@@ -41,7 +42,7 @@ class DiscussionState {
       this.data.comments.clear();
       this.data.loaded = false;
       this.view.composers.clear();
-      Object.assign(this.view, { open: false, selecting: false, deletion: null, selectedThreadId: null, error: '', unread: false, drag: null });
+      Object.assign(this.view, { open: false, selecting: false, deletion: null, selectedThreadId: null, error: '', unread: false, drag: null, reactionPicker: null });
     }
     this.emit();
   }
@@ -81,7 +82,8 @@ class DiscussionState {
 
   sameComment(a, b, ignoreCreatedAt = false) {
     return ['id', 'threadId', 'threadNumber', 'body', 'author', 'createdAt', 'editedAt',
-      'xpath', 'relativeX', 'relativeY', 'canEdit', 'resolvedAt'].every(key => (ignoreCreatedAt && key === 'createdAt') || a[key] === b[key]);
+      'xpath', 'relativeX', 'relativeY', 'canEdit', 'resolvedAt'].every(key => (ignoreCreatedAt && key === 'createdAt') || a[key] === b[key])
+      && JSON.stringify(a.reactions || []) === JSON.stringify(b.reactions || []);
   }
 
   compose(key, options) {
@@ -211,6 +213,27 @@ class DiscussionState {
     }
   }
 
+  async react(commentId, emoji) {
+    const comment = this.data.comments.get(commentId);
+    if (!comment || !this.view.canManage || this.view.reacting.has(commentId)) return false;
+    const reacted = !comment.reactions?.find(reaction => reaction.emoji === emoji)?.reacted;
+    this.view.reactionPicker = null;
+    this.view.reacting.add(commentId);
+    this.emit();
+    try {
+      return await this.mutate(() => this.api.react(commentId, emoji, reacted), result => {
+        const current = this.data.comments.get(commentId);
+        if (current) this.data.comments.set(commentId, { ...current, reactions: result.reactions });
+      }, comment.threadId);
+    } catch (error) {
+      this.view.error = error.message;
+      return false;
+    } finally {
+      this.view.reacting.delete(commentId);
+      this.emit();
+    }
+  }
+
   requestDelete(commentId) {
     const comment = this.data.comments.get(commentId);
     if (!comment?.canEdit) return;
@@ -232,6 +255,11 @@ class DiscussionState {
       return await this.mutate(() => this.api.remove(deletion.commentId), () => {
         for (const [id, comment] of this.data.comments) {
           if (id === deletion.commentId || (deletion.root && comment.threadId === deletion.threadId)) this.data.comments.delete(id);
+        }
+        if (deletion.root) {
+          for (const [key, composer] of this.view.composers) {
+            if (composer.threadId === deletion.threadId) this.view.composers.delete(key);
+          }
         }
         if (deletion.root && this.view.selectedThreadId === deletion.threadId) this.view.selectedThreadId = null;
         this.view.deletion = null;
@@ -277,6 +305,7 @@ class DiscussionState {
     const threads = this.threads();
     if (this.view.deletion && !this.data.comments.has(this.view.deletion.commentId) && !this.view.deletion.pending) this.view.deletion = null;
     if (!this.data.comments.has(this.view.menuId)) this.view.menuId = null;
+    if (!this.view.open || !this.view.canManage || !this.data.comments.has(this.view.reactionPicker)) this.view.reactionPicker = null;
     if (!threads.some(thread => thread.id === this.view.selectedThreadId)) this.view.selectedThreadId = null;
     for (const listener of this.listeners) listener();
   }

@@ -8,6 +8,8 @@ const viewerSource = fs.readFileSync(path.resolve(__dirname, '../../main/kotlin/
 const constants = Object.fromEntries([...viewerSource.matchAll(/const val (\w+) = "([^"]+)"/g)].map(match => [match[1], match[2]]));
 const values = Object.fromEntries([...viewerSource.matchAll(/"(\w+)" to ArtifactViewerIds\.(\w+)/g)].map(match => [match[1], constants[match[2]]]));
 const format = process.env.ARTIFACT_FORMAT || 'html';
+const controllerSource = fs.readFileSync(path.resolve(__dirname, '../../main/kotlin/dev/uncomplex/dumphere/adapters/api/HtmlPageController.kt'), 'utf8');
+const viewerPolicy = [...controllerSource.match(/private val viewerSecurityPolicy =\s*listOf\(([\s\S]*?)\)\.joinToString/)[1].matchAll(/"([^"]+)"/g)].map(match => match[1]).join('; ');
 Object.assign(values, {
   TITLE: 'Discussion browser regression', ID: 'browser-fixture', FORMAT: format, FORMAT_LABEL: format === 'markdown' ? 'Markdown' : 'HTML',
   VISIBILITY: 'internal', PUBLIC_UNTIL: '', VERSION: 1, CAN_VIEW: true, CAN_MANAGE: true,
@@ -31,11 +33,11 @@ const server = http.createServer(async (request, response) => {
   if (url.pathname.startsWith('/viewer/')) {
     const file = path.resolve(resources, 'static', '.' + url.pathname);
     if (!file.startsWith(path.join(resources, 'static', 'viewer') + path.sep) || !fs.existsSync(file)) return send({}, 404);
-    response.writeHead(200, { 'Content-Type': file.endsWith('.css') ? 'text/css' : 'application/javascript' });
+    response.writeHead(200, { 'Content-Type': file.endsWith('.css') ? 'text/css' : file.endsWith('.json') ? 'application/json' : 'application/javascript' });
     return response.end(fs.readFileSync(file));
   }
   if (url.pathname === '/' || url.pathname.endsWith('/wrapper') || url.pathname.endsWith('/content')) {
-    response.writeHead(200, { 'Content-Type': 'text/html' });
+    response.writeHead(200, { 'Content-Type': 'text/html', ...(url.pathname === '/' ? { 'Content-Security-Policy': viewerPolicy } : {}) });
     // Rendered-document fixture only. Actual Markdown conversion is covered by backend integration tests.
     const content = format === 'markdown'
       ? '<main><h1 id="browser-fixture">Browser fixture</h1><p>Artifact content for <strong>anchored comments</strong>.</p><ul><li>Review item</li></ul><table><tbody><tr><td>Review cell</td></tr></tbody></table><pre><code>const ready = true;</code></pre></main>'
@@ -57,7 +59,8 @@ const server = http.createServer(async (request, response) => {
     const comment = {
       id: nextComment++, threadId, threadNumber: threadId, body: body.body, author: 'Browser tester',
       createdAt: new Date().toISOString(), editedAt: null, resolvedAt: parent?.resolvedAt || null, canEdit: true,
-      xpath: parent?.xpath || body.xpath || null, relativeX: parent?.relativeX ?? body.relativeX ?? null, relativeY: parent?.relativeY ?? body.relativeY ?? null
+      xpath: parent?.xpath || body.xpath || null, relativeX: parent?.relativeX ?? body.relativeX ?? null, relativeY: parent?.relativeY ?? body.relativeY ?? null,
+      reactions: []
     };
     comments.push(comment);
     return send(comment, 201);
@@ -68,6 +71,14 @@ const server = http.createServer(async (request, response) => {
     const resolvedAt = body.resolved ? new Date().toISOString() : null;
     comments = comments.map(comment => comment.threadId === threadId ? { ...comment, resolvedAt } : comment);
     return send({ threadId, threadNumber: threadId, resolvedAt });
+  }
+  const reaction = url.pathname.match(/\/comments\/(\d+)\/reaction$/);
+  if (request.method === 'PUT' && reaction) {
+    const comment = comments.find(item => item.id === Number(reaction[1]));
+    if (!comment) return send({}, 404);
+    comment.reactions = comment.reactions.filter(item => item.emoji !== body.emoji);
+    if (body.reacted) comment.reactions.push({ emoji: body.emoji, count: 1, reacted: true, users: ['Browser tester'] });
+    return send({ commentId: comment.id, reactions: comment.reactions });
   }
   const target = Number(url.pathname.match(/\/comments\/(\d+)$/)?.[1]);
   const comment = comments.find(item => item.id === target);

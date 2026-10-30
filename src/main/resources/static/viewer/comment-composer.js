@@ -4,12 +4,12 @@ class CommentComposer extends HTMLElement {
     this.innerHTML = `
       <form class="comment-form">
         <label><span class="composer-label"></span>
-          <textarea rows="4" maxlength="10000" required placeholder="Write a comment..."></textarea>
+          <textarea rows="4" maxlength="10000" required placeholder="Comment..."></textarea>
         </label>
         <p class="error" role="alert"></p>
         <div class="comment-form-actions">
           <button class="button" type="button">Cancel</button>
-          <button class="button primary" type="submit">Post comment</button>
+          <button class="button primary" type="submit">Comment</button>
         </div>
       </form>`;
     this.form = this.querySelector('form');
@@ -18,8 +18,8 @@ class CommentComposer extends HTMLElement {
     this.cancelButton = this.querySelector('[type="button"]');
     this.postButton = this.querySelector('[type="submit"]');
     this.querySelector('.composer-label').textContent = this.getAttribute('label') || 'New comment';
-    this.input.placeholder = this.getAttribute('placeholder') || 'Write a comment...';
-    this.postLabel = this.getAttribute('submit-label') || 'Post comment';
+    this.input.placeholder = this.getAttribute('placeholder') || 'Comment...';
+    this.postLabel = this.getAttribute('submit-label') || 'Comment';
     this.postButton.textContent = this.postLabel;
     if (this.hasAttribute('compact')) this.input.rows = 1;
     this.input.dataset.testid = this.dataset.bodyTestid;
@@ -28,9 +28,12 @@ class CommentComposer extends HTMLElement {
     this.model = null;
 
     this.input.addEventListener('input', () => {
-      this.dispatchEvent(new CustomEvent('comment-input', { bubbles: true, detail: { body: this.input.value } }));
+      const body = this.input.value;
+      this.activate();
+      this.dispatchEvent(new CustomEvent('comment-input', { bubbles: true, detail: { body } }));
       this.resizeInput();
     });
+    this.input.addEventListener('focus', () => this.activate());
 
     this.input.addEventListener('keydown', event => {
       if (event.key === 'Enter' && event.ctrlKey && !event.isComposing) {
@@ -63,7 +66,9 @@ class CommentComposer extends HTMLElement {
     this.model = signature;
     const wasOpen = !this.hidden;
     const oldPending = this.submitting;
-    this.hidden = !model?.open;
+    this.activeDraft = !!model?.open;
+    this.hidden = !model?.open && !this.hasAttribute('persistent');
+    this.querySelector('.comment-form-actions').hidden = !model?.open;
     this.submitting = !!model?.pending;
     const body = model?.body || '';
     if (this.input.value !== body) this.input.value = body;
@@ -74,8 +79,14 @@ class CommentComposer extends HTMLElement {
     this.cancelButton.disabled = this.submitting;
     this.input.readOnly = this.submitting;
     this.postButton.textContent = this.submitting ? (this.getAttribute('pending-label') || 'Posting...') : this.postLabel;
-    if (model?.open) this.resizeInput();
+    if (!this.hidden) this.resizeInput();
     if (wasOpen !== !this.hidden || oldPending !== this.submitting) this.dispatchEvent(new Event('composer-statechange', { bubbles: true }));
+  }
+
+  activate() {
+    if (this.hasAttribute('persistent') && !this.activeDraft && !this.input.disabled) {
+      this.dispatchEvent(new CustomEvent('comment-activate', { bubbles: true }));
+    }
   }
 
   resizeInput() {

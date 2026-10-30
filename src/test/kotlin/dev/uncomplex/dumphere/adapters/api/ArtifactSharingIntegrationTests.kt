@@ -1,6 +1,7 @@
 package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.AuthenticatedUser
+import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
@@ -57,6 +58,7 @@ class ArtifactSharingIntegrationTests {
     @Autowired private lateinit var jdbc: JdbcTemplate
 
     @Autowired private lateinit var pages: HtmlPageStore
+    @Autowired private lateinit var users: UserProvisioningService
 
     companion object {
         @JvmStatic
@@ -908,7 +910,8 @@ class ArtifactSharingIntegrationTests {
     @Test
     fun `your artifacts lists only creations by the signed-in user newest first excluding the current artifact`() {
         val subject = UUID.randomUUID().toString()
-        val author = AuthenticatedUser(subject, "alex@example.com", "Alex Morgan")
+        val identity = AuthenticatedUser(subject, "alex@example.com", "Alex Morgan")
+        val author = users.provision(identity)
         val older = pages.publish("Older artifact", "<p>Older</p>", PageContentFormat.HTML, author)
         val newer = pages.publish("Newer artifact", "# Newer", PageContentFormat.MARKDOWN, author)
         val current = pages.publish("Current artifact", "<p>Current</p>", PageContentFormat.HTML, author)
@@ -917,7 +920,7 @@ class ArtifactSharingIntegrationTests {
                 "Another user's artifact",
                 "<p>Other</p>",
                 PageContentFormat.HTML,
-                author.copy(subject = UUID.randomUUID().toString()),
+                users.provision(identity.copy(subject = UUID.randomUUID().toString())),
             )
         pages.update(older.id, "<p>Updated after the newer artifact</p>", author)
         pages.update(other.id, "<p>Edited but not created by this user</p>", author)

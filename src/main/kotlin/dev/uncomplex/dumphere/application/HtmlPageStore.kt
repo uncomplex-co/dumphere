@@ -21,7 +21,6 @@ class HtmlPageStore(
     private val objectMapper: ObjectMapper,
     private val pages: HtmlPageRepository,
     private val versions: HtmlPageVersionRepository,
-    private val userProvisioning: UserProvisioningService,
     private val jdbcAggregateTemplate: JdbcAggregateTemplate,
     private val users: UserRepository,
 ) {
@@ -32,7 +31,7 @@ class HtmlPageStore(
         title: String?,
         contents: String,
         contentFormat: PageContentFormat,
-        createdBy: AuthenticatedUser?,
+        createdBy: UserEntity?,
     ): PublishedPage {
         val bytes = contents.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty()) { "contents must not be empty" }
@@ -42,7 +41,7 @@ class HtmlPageStore(
 
         val id = newId()
         val now = Instant.now()
-        val user = createdBy?.let { userProvisioning.provision(it) }
+        val user = createdBy
         val page =
             PublishedPage(
                 id = id,
@@ -72,12 +71,11 @@ class HtmlPageStore(
     fun update(
         id: String,
         contents: String,
-        updatedBy: AuthenticatedUser?,
+        updatedBy: UserEntity?,
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
         val existingEntity = pages.findByIdForUpdate(id) ?: return null
-        val existing = existingEntity.toPublishedPage()
         val bytes = contents.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty()) { "contents must not be empty" }
         require(bytes.size <= properties.maxHtmlBytes) {
@@ -85,16 +83,13 @@ class HtmlPageStore(
         }
 
         val now = Instant.now()
-        val user = updatedBy?.let { userProvisioning.provision(it) }
-        val page =
-            existing.copy(
-                updatedAt = now,
-                version = existing.version + 1,
-                bytes = bytes.size.toLong(),
-            )
+        existingEntity.updatedAt = now
+        existingEntity.updatedByUserId = updatedBy?.id
+        existingEntity.currentVersion += 1
+        existingEntity.currentBytes = bytes.size.toLong()
 
-        versions.save(page.toVersionEntity(contents, now, user?.id))
-        val updated = pages.save(page.toEntity(createdByUserId = existingEntity.createdByUserId, updatedByUserId = user?.id))
+        versions.save(existingEntity.toPublishedPage().toVersionEntity(contents, now, updatedBy?.id))
+        val updated = pages.save(existingEntity)
 
         return updated.toPublishedPage()
     }
@@ -105,7 +100,7 @@ class HtmlPageStore(
         oldString: String,
         newString: String,
         replaceAll: Boolean,
-        updatedBy: AuthenticatedUser?,
+        updatedBy: UserEntity?,
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
@@ -133,27 +128,23 @@ class HtmlPageStore(
     fun setLive(
         id: String,
         isLive: Boolean,
-        updatedBy: AuthenticatedUser?,
+        updatedBy: UserEntity?,
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
         val existingEntity = pages.findByIdForUpdate(id) ?: return null
-        val user = updatedBy?.let { userProvisioning.provision(it) }
-        val updatedEntity =
-            existingEntity.copy(
-                isLive = isLive,
-                updatedAt = Instant.now(),
-                updatedByUserId = user?.id,
-            )
-        pages.save(updatedEntity)
-        return updatedEntity.toPublishedPage()
+        existingEntity.isLive = isLive
+        existingEntity.updatedAt = Instant.now()
+        existingEntity.updatedByUserId = updatedBy?.id
+        pages.save(existingEntity)
+        return existingEntity.toPublishedPage()
     }
 
     @Transactional
     fun setVisibility(
         id: String,
         visibility: ArtifactVisibility,
-        updatedBy: AuthenticatedUser?,
+        updatedBy: UserEntity?,
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
@@ -166,10 +157,11 @@ class HtmlPageStore(
             }
         if (publicUntil == existing.publicUntil) return existing.toPublishedPage()
 
-        val user = updatedBy?.let { userProvisioning.provision(it) }
-        val updated = existing.copy(publicUntil = publicUntil, updatedAt = now, updatedByUserId = user?.id)
-        pages.save(updated)
-        return updated.toPublishedPage()
+        existing.publicUntil = publicUntil
+        existing.updatedAt = now
+        existing.updatedByUserId = updatedBy?.id
+        pages.save(existing)
+        return existing.toPublishedPage()
     }
 
     @Transactional
@@ -177,16 +169,17 @@ class HtmlPageStore(
         id: String,
         key: String,
         value: Any?,
-        updatedBy: AuthenticatedUser?,
+        updatedBy: UserEntity?,
     ): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
         val existing = pages.findByIdForUpdate(id) ?: return null
         val metadata = readCustomMetadata(id).toMutableMap()
         if (value == null) metadata.remove(key) else metadata[key] = value
-        val user = updatedBy?.let(userProvisioning::provision)
         val now = Instant.now()
-        pages.updateCustomMetadata(id, objectMapper.writeValueAsString(metadata), now, user?.id)
-        return existing.copy(updatedAt = now, updatedByUserId = user?.id).toPublishedPage()
+        pages.updateCustomMetadata(id, objectMapper.writeValueAsString(metadata), now, updatedBy?.id)
+        existing.updatedAt = now
+        existing.updatedByUserId = updatedBy?.id
+        return existing.toPublishedPage()
     }
 
     private fun readCustomMetadata(id: String): Map<String, Any> =

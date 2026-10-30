@@ -1,6 +1,6 @@
 package dev.uncomplex.dumphere.application.mcp.tools
 
-import dev.uncomplex.dumphere.application.AuthenticatedUser
+import dev.uncomplex.dumphere.application.UserEntity
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PublishedPage
 import org.springframework.stereotype.Service
@@ -12,6 +12,6 @@ class UpdateHtmlTool(
     fun execute(
         id: String,
         contents: String,
-        user: AuthenticatedUser?,
+        user: UserEntity?,
     ): PublishedPage = requireNotNull(store.update(id, contents, user)) { "page not found: $id" }
 }

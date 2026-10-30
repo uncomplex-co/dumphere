@@ -85,6 +85,7 @@ class SecurityConfig(
                         matcher("/p/{id}/status"),
                         matcher("/p/{id}/comments"),
                         matcher("/p/{id}/comments/{commentId}"),
+                        matcher("/p/{id}/comments/{commentId}/reaction"),
                         matcher("/p/{id}/threads/{threadId}/comments"),
                         matcher("/p/{id}/threads/{threadId}/resolution"),
                     ).access { authentication, context ->
@@ -139,6 +140,7 @@ class SecurityConfig(
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/consent"))
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/status"))
                 exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments"))
+                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments/{commentId}/reaction"))
                 exceptions.defaultAuthenticationEntryPointFor(
                     HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                     matcher("/p/{id}/comments/{commentId}"),

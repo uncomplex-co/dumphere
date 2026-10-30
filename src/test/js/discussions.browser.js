@@ -32,8 +32,16 @@
   if ($('discussion-filter').getAttribute('aria-pressed') === 'true') $('discussion-filter').click();
   await wait(() => rootNode(), 'Remote root did not arrive through polling');
   rootNode().click();
-  thread().querySelector('.thread-reply-button').click();
-  const replyInput = thread().querySelector('.thread-reply textarea');
+  const replyInput = thread().querySelector('[data-testid="' + document.body.dataset.replyTestid + '"]');
+  assert(replyInput instanceof HTMLTextAreaElement && !replyInput.closest('comment-composer').hidden, 'Idle reply field is not a real visible textarea');
+  assert(replyInput.closest('form').querySelector('.comment-form-actions').hidden, 'Idle reply field shows action buttons');
+  const idleBorder = getComputedStyle(replyInput).borderTopColor;
+  const replyPlaceholder = replyInput.placeholder;
+  replyInput.focus();
+  assert(thread().querySelector('[data-testid="' + document.body.dataset.replyTestid + '"]') === replyInput && replyInput.placeholder === replyPlaceholder,
+    'Focusing the reply field replaced the textarea or changed its prompt');
+  assert(replyInput.placeholder === 'Reply...' && replyInput.closest('form').querySelector('[type="submit"]').textContent === 'Reply', 'Reply composer copy is incorrect');
+  assert(getComputedStyle(replyInput).borderTopColor !== idleBorder, 'Focused reply textarea has no focused border style');
   const write = async (input, value) => {
     // Let the browser finish focusing a newly revealed textarea before simulating typing/selection.
     await new Promise(requestAnimationFrame);
@@ -61,6 +69,8 @@
   $('discussion-filter').click();
   assert(thread().querySelector('.thread-reply textarea') === replyInput && replyInput.value === 'Unfinished reply stays here', 'Filtering replaced a composer or lost its draft');
   replyInput.closest('comment-composer').querySelector('[type="button"]').click();
+  assert(thread().querySelector('[data-testid="' + document.body.dataset.replyTestid + '"]') === replyInput && !replyInput.closest('comment-composer').hidden,
+    'Cancelling a reply removed or replaced its textarea');
 
   rootNode().querySelector('.comment-menu-trigger').click();
   rootNode().querySelector('[data-testid="' + document.body.dataset.commentEditTestid + '"]').click();
@@ -74,7 +84,7 @@
   assert(rootNode().querySelector('.comment-body').textContent === 'Changed by another client', 'Cancelling did not reveal the remote text');
 
   rootNode().click();
-  thread().querySelector('.thread-reply-button').click();
+  thread().querySelector('[data-testid="' + document.body.dataset.replyTestid + '"]').focus();
   const orphan = thread().querySelector('.thread-reply textarea');
   await write(orphan, 'Keep this even if the thread is deleted');
   await request('/comments/' + root.id, 'DELETE');
@@ -106,6 +116,7 @@
   try {
     $('comment-add').click();
     const input = $('comment-composer').querySelector('textarea');
+    assert(input.placeholder === 'Comment...' && input.closest('form').querySelector('[type="submit"]').textContent === 'Comment', 'New-thread composer copy is incorrect');
     await write(input, 'Local root without a follow-up fetch');
     input.closest('form').requestSubmit();
     const local = () => [...document.querySelectorAll('.comment')].find(node => node.querySelector('.comment-body').textContent === 'Local root without a follow-up fetch');
@@ -114,13 +125,14 @@
     localRoot.querySelector('.comment-menu-trigger').click();
     localRoot.querySelector('[data-testid="' + document.body.dataset.commentEditTestid + '"]').click();
     const edit = localRoot.querySelector('.comment-edit-composer textarea');
+    assert(edit.placeholder === 'Edit your comment...' && edit.closest('form').querySelector('[type="submit"]').textContent === 'Save', 'Edit composer copy is incorrect');
     await write(edit, 'Locally edited without a follow-up fetch');
     edit.closest('form').requestSubmit();
     await wait(() => localRoot.querySelector('.comment-body').textContent === 'Locally edited without a follow-up fetch', 'Local edit did not render from its response');
     assert(!localRoot.querySelector('.comment-edited').hidden, 'Edited timestamp indicator did not update');
     localRoot.click();
     const localThread = localRoot.closest('.comment-thread');
-    localThread.querySelector('.thread-reply-button').click();
+    localThread.querySelector('[data-testid="' + document.body.dataset.replyTestid + '"]').focus();
     const localReplyInput = localThread.querySelector('.thread-reply textarea');
     await write(localReplyInput, 'Local reply without a follow-up fetch');
     localReplyInput.closest('form').requestSubmit();

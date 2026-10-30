@@ -13,18 +13,10 @@ class UserProvisioningService(
     fun provision(user: AuthenticatedUser): UserEntity {
         val now = Instant.now()
         val existing = users.findBySubject(user.subject)
-        return users.save(
-            existing?.copy(
-                email = user.email ?: existing.email,
-                displayName = user.displayName ?: existing.displayName,
-                updatedAt = now,
-            ) ?: UserEntity(
-                subject = user.subject,
-                email = user.email,
-                displayName = user.displayName,
-                createdAt = now,
-                updatedAt = now,
-            ),
-        )
+        val resolved = existing ?: UserEntity(subject = user.subject, createdAt = now, updatedAt = now)
+        resolved.email = user.email ?: resolved.email
+        resolved.displayName = user.displayName ?: resolved.displayName
+        resolved.updatedAt = now
+        return users.save(resolved)
     }
 }

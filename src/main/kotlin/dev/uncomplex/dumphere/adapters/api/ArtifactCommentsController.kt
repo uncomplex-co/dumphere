@@ -1,10 +1,15 @@
 package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.adapters.ReactionEmojiCatalog
+
 import dev.uncomplex.dumphere.application.ArtifactComment
 import dev.uncomplex.dumphere.application.ArtifactComments
 import dev.uncomplex.dumphere.application.EditCommentResult
 import dev.uncomplex.dumphere.application.DeleteCommentResult
 import dev.uncomplex.dumphere.application.DiscussionThreadState
+import dev.uncomplex.dumphere.application.CommentReactionState
+import dev.uncomplex.dumphere.application.SetCommentReactionUsecase
+import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.authenticatedUser
 import dev.uncomplex.dumphere.ports.CommentThreadRepository
@@ -18,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
@@ -31,6 +37,9 @@ class ArtifactCommentsController(
     private val versions: HtmlPageVersionRepository,
     private val access: ArtifactAccess,
     private val threads: CommentThreadRepository,
+    private val setReaction: SetCommentReactionUsecase,
+    private val emojiCatalog: ReactionEmojiCatalog,
+    private val users: UserProvisioningService,
 ) {
     @GetMapping("/p/{id}/comments")
     fun list(
@@ -38,7 +47,7 @@ class ArtifactCommentsController(
         authentication: Authentication?,
     ): ResponseEntity<List<ArtifactComment>> {
         requireAccess(id, authentication)
-        val viewer = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+        val viewer = resolveUser(authentication)
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(comments.list(id, viewer))
     }
 
@@ -72,7 +81,7 @@ class ArtifactCommentsController(
         val version =
             versions.findByPageIdAndVersion(id, request.version)
                 ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Artifact version not found")
-        val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+        val author = resolveUser(authentication)
         val comment = comments.add(id, requireNotNull(version.id), body, author, request.xpath, request.relativeX, request.relativeY)
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(comment)
     }
@@ -92,9 +101,26 @@ class ArtifactCommentsController(
         val version =
             versions.findByPageIdAndVersion(id, request.version)
                 ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Artifact version not found")
-        val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+        val author = resolveUser(authentication)
         val comment = comments.reply(thread, requireNotNull(version.id), body, author)
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(comment)
+    }
+
+    @PutMapping("/p/{id}/comments/{commentId}/reaction")
+    fun react(
+        @PathVariable id: String,
+        @PathVariable commentId: Long,
+        @RequestBody request: SetCommentReactionRequest,
+        authentication: Authentication?,
+    ): ResponseEntity<CommentReactionState> {
+        requireAccess(id, authentication)
+        val author = resolveUser(authentication)
+            ?: throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        if (!emojiCatalog.contains(request.emoji)) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported reaction emoji")
+        return when (val result = setReaction.execute(SetCommentReactionUsecase.Command(id, commentId, request.emoji, request.reacted, author))) {
+            is SetCommentReactionUsecase.Result.Success -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.state)
+            SetCommentReactionUsecase.Result.NotFound -> throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        }
     }
 
     @PatchMapping("/p/{id}/comments/{commentId}")
@@ -105,7 +131,7 @@ class ArtifactCommentsController(
         authentication: Authentication?,
     ): ResponseEntity<ArtifactComment> {
         requireAccess(id, authentication)
-        val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+        val author = resolveUser(authentication)
             ?: throw ResponseStatusException(HttpStatus.FORBIDDEN)
         return when (val result = comments.edit(id, commentId, validatedBody(request.body), author)) {
             is EditCommentResult.Updated -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.comment)
@@ -121,7 +147,7 @@ class ArtifactCommentsController(
         authentication: Authentication?,
     ): ResponseEntity<Void> {
         requireAccess(id, authentication)
-        val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+        val author = resolveUser(authentication)
             ?: throw ResponseStatusException(HttpStatus.FORBIDDEN)
         return when (comments.delete(id, commentId, author)) {
             DeleteCommentResult.DELETED -> ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build()
@@ -138,12 +164,15 @@ class ArtifactCommentsController(
         authentication: Authentication?,
     ): ResponseEntity<DiscussionThreadState> {
         requireAccess(id, authentication)
-        val author = authentication.takeIf { access.isMember(it) }.authenticatedUser()
+        val author = resolveUser(authentication)
             ?: throw ResponseStatusException(HttpStatus.FORBIDDEN)
         val state = comments.setResolved(id, threadId, request.resolved, author)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(state)
     }
+
+    private fun resolveUser(authentication: Authentication?) =
+        authentication.takeIf { access.isMember(it) }.authenticatedUser()?.let(users::provision)
 
     private fun validatedBody(value: String): String {
         val body = value.trim()
@@ -178,3 +207,5 @@ data class ReplyToThreadRequest(
 data class EditArtifactCommentRequest(val body: String)
 
 data class SetThreadResolutionRequest(val resolved: Boolean)
+
+data class SetCommentReactionRequest(val emoji: String, val reacted: Boolean)

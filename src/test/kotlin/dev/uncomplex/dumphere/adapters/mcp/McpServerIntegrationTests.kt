@@ -148,6 +148,8 @@ class McpServerIntegrationTests {
                 "list_thread_comments",
                 "start_discussion_thread",
                 "reply_to_thread",
+                "add_comment_reaction",
+                "remove_comment_reaction",
                 "resolve_discussion_thread",
                 "reopen_discussion_thread",
             ),

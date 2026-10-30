@@ -8,6 +8,7 @@
   <script src="/viewer/comment-composer.js" defer></script>
   <script src="/viewer/discussion-api.js" defer></script>
   <script src="/viewer/discussion-state.js" defer></script>
+  <script src="/viewer/reaction-picker.js" defer></script>
   <script src="/viewer/discussions.js" defer></script>
   <script src="/viewer/artifact-messages.js" defer></script>
   <script src="/viewer/artifact-interactions.js" defer></script>
@@ -26,6 +27,7 @@
     <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
     <symbol id="icon-comments" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 1-8 8H5l-4 3V11a9 9 0 0 1 19 0Z"/><path d="M7 9h8M7 13h5"/></symbol>
     <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="icon-reaction" viewBox="0 0 24 24"><path stroke-width="1" stroke-linecap="round" stroke-linejoin="round" d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z"/></symbol>
     <symbol id="icon-select-element" viewBox="0 0 24 24"><path stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672Zm-7.518-.267A8.25 8.25 0 1 1 20.25 10.5M8.288 14.212A5.25 5.25 0 1 1 17.25 10.5"/></symbol>
     <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
     <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></symbol>
@@ -108,5 +110,6 @@
     </form>
   </dialog>
   <div class="toast" id="toast" role="status" hidden></div>
+  <div id="reaction-picker" class="reaction-picker" popover="auto" role="dialog" aria-label="Add emoji reaction" th:attr="data-testid=${REACTION_PICKER_ID},data-add-testid=${REACTION_ADD_ID},data-pill-testid=${REACTION_PILL_ID},data-search-testid=${REACTION_SEARCH_ID},data-emoji-testid=${REACTION_EMOJI_ID},data-category-testid=${REACTION_CATEGORY_ID},data-clear-testid=${REACTION_CLEAR_ID},data-quick-testid=${REACTION_QUICK_ID}"></div>
 </body>
 </html>

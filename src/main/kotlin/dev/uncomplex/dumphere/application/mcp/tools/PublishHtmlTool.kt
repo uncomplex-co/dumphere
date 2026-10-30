@@ -1,6 +1,6 @@
 package dev.uncomplex.dumphere.application.mcp.tools
 
-import dev.uncomplex.dumphere.application.AuthenticatedUser
+import dev.uncomplex.dumphere.application.UserEntity
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PublishedPage
@@ -14,6 +14,6 @@ class PublishHtmlTool(
         contents: String,
         format: String,
         title: String?,
-        user: AuthenticatedUser?,
+        user: UserEntity?,
     ): PublishedPage = store.publish(title, contents, PageContentFormat.fromToolType(format), user)
 }

@@ -6,38 +6,38 @@ import org.springframework.data.relational.core.mapping.Table
 import java.time.Instant
 
 @Table("users")
-data class UserEntity(
-    @Id val id: Long? = null,
-    val subject: String,
-    val email: String? = null,
-    val displayName: String? = null,
-    val createdAt: Instant,
-    val updatedAt: Instant,
+class UserEntity(
+    @Id var id: Long? = null,
+    var subject: String,
+    var email: String? = null,
+    var displayName: String? = null,
+    var createdAt: Instant,
+    var updatedAt: Instant,
 )
 
 @Table("html_pages")
-data class HtmlPageEntity(
-    @Id @Column("id") val id: String,
-    val title: String,
-    val url: String,
-    val contentFormat: PageContentFormat,
-    val createdAt: Instant,
-    val createdByUserId: Long? = null,
-    val updatedAt: Instant? = null,
-    val updatedByUserId: Long? = null,
-    val currentVersion: Int,
-    val currentBytes: Long,
-    val isLive: Boolean = false,
-    val publicUntil: Instant? = null,
+class HtmlPageEntity(
+    @Id @Column("id") var id: String,
+    var title: String,
+    var url: String,
+    var contentFormat: PageContentFormat,
+    var createdAt: Instant,
+    var createdByUserId: Long? = null,
+    var updatedAt: Instant? = null,
+    var updatedByUserId: Long? = null,
+    var currentVersion: Int,
+    var currentBytes: Long,
+    var isLive: Boolean = false,
+    var publicUntil: Instant? = null,
 )
 
 @Table("html_page_versions")
-data class HtmlPageVersionEntity(
-    @Id val id: Long? = null,
-    val pageId: String,
-    val version: Int,
-    val html: String,
-    val bytes: Long,
-    val createdAt: Instant,
-    val createdByUserId: Long? = null,
+class HtmlPageVersionEntity(
+    @Id var id: Long? = null,
+    var pageId: String,
+    var version: Int,
+    var html: String,
+    var bytes: Long,
+    var createdAt: Instant,
+    var createdByUserId: Long? = null,
 )

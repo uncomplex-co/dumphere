@@ -213,6 +213,89 @@ test('the first snapshot establishes a baseline and unchanged snapshots do not p
   assert.equal(state.view.unread, false);
 });
 
+test('remote reactions update canonical data without moving threads or losing drafts', async () => {
+  const { state, snapshot } = await setup([comment(1), comment(2)]);
+  state.compose('reply:1', { mode: 'reply', threadId: 1 });
+  state.draft('reply:1', 'Keep this reply');
+  const reactions = [{ emoji: '👍', count: 1, reacted: false, users: ['Another member'] }];
+  snapshot([comment(1, 1, { reactions }), comment(2)]);
+
+  await state.refresh();
+
+  assert.deepEqual(state.data.comments.get(1).reactions, reactions);
+  assert.equal(state.view.composers.get('reply:1').body, 'Keep this reply');
+  assert.deepEqual(state.visibleThreads().map(thread => thread.id), [2, 1]);
+  assert.equal(state.view.unread, true);
+});
+
+test('successful reaction writes update data and close the picker without a follow-up read', async () => {
+  const { state, api } = await setup([comment(1)]);
+  state.change({ open: true, canManage: true, reactionPicker: 1 });
+  api.list = async () => { throw new Error('Reads unavailable'); };
+  api.react = async (commentId, emoji, reacted) => {
+    assert.deepEqual([commentId, emoji, reacted], [1, '👍', true]);
+    return { commentId, reactions: [{ emoji, count: 1, reacted, users: ['Team member'] }] };
+  };
+
+  const success = await state.react(1, '👍');
+
+  assert.equal(success, true);
+  assert.equal(state.data.comments.get(1).reactions[0].reacted, true);
+  assert.equal(state.view.reactionPicker, null);
+  assert.equal(state.view.reacting.size, 0);
+  assert.equal(state.view.unread, false);
+});
+
+test('clicking your reaction removes only that emoji', async () => {
+  const { state, api } = await setup([comment(1, 1, { reactions: [{ emoji: '👍', count: 1, reacted: true, users: ['Team member'] }] })]);
+  state.change({ canManage: true });
+  api.react = async (commentId, emoji, reacted) => {
+    assert.deepEqual([commentId, emoji, reacted], [1, '👍', false]);
+    return { commentId, reactions: [] };
+  };
+
+  const success = await state.react(1, '👍');
+
+  assert.equal(success, true);
+  assert.deepEqual(state.data.comments.get(1).reactions, []);
+});
+
+test('a failed reaction leaves counts untouched and shows an error', async () => {
+  const { state, api } = await setup([comment(1)]);
+  state.change({ canManage: true });
+  api.react = async () => { throw new Error('Reaction failed'); };
+
+  const success = await state.react(1, '👍');
+
+  assert.equal(success, false);
+  assert.equal(state.data.comments.get(1).reactions, undefined);
+  assert.equal(state.view.error, 'Reaction failed');
+  assert.equal(state.view.reacting.size, 0);
+});
+
+test('closing discussions dismisses the reaction picker', async () => {
+  const { state } = await setup([comment(1)]);
+  state.change({ open: true, canManage: true, reactionPicker: 1 });
+
+  state.close();
+
+  assert.equal(state.view.reactionPicker, null);
+});
+
+test('deleting a thread locally discards its reply draft rather than retaining a deleted conversation', async () => {
+  const { state, api } = await setup([comment(1)]);
+  api.remove = async () => null;
+  state.compose('reply:1', { mode: 'reply', threadId: 1 });
+  state.draft('reply:1', 'Unsent reply');
+  state.requestDelete(1);
+
+  const success = await state.delete();
+
+  assert.equal(success, true);
+  assert.equal(state.view.composers.has('reply:1'), false);
+  assert.deepEqual(state.visibleThreads(), []);
+});
+
 test('remote additions, edits, deletions and resolution changes notify while closed, and opening acknowledges them', async () => {
   for (const updated of [
     [comment(1), comment(2, 1)],

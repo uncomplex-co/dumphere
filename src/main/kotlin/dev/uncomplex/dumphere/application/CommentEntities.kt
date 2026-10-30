@@ -5,29 +5,29 @@ import org.springframework.data.relational.core.mapping.Table
 import java.time.Instant
 
 @Table("comment_threads")
-data class CommentThreadEntity(
-    @Id val id: Long? = null,
-    val artifactId: String,
-    val number: Long,
-    val createdInVersionId: Long,
-    val createdByUserId: Long? = null,
-    val createdAt: Instant,
-    val xpath: String? = null,
-    val relativeX: Double? = null,
-    val relativeY: Double? = null,
-    val deletedAt: Instant? = null,
-    val resolvedAt: Instant? = null,
-    val resolvedByUserId: Long? = null,
+class CommentThreadEntity(
+    @Id var id: Long? = null,
+    var artifactId: String,
+    var number: Long,
+    var createdInVersionId: Long,
+    var createdByUserId: Long? = null,
+    var createdAt: Instant,
+    var xpath: String? = null,
+    var relativeX: Double? = null,
+    var relativeY: Double? = null,
+    var deletedAt: Instant? = null,
+    var resolvedAt: Instant? = null,
+    var resolvedByUserId: Long? = null,
 )
 
 @Table("comments")
-data class CommentEntity(
-    @Id val id: Long? = null,
-    val threadId: Long,
-    val createdInVersionId: Long,
-    val authorUserId: Long? = null,
-    val body: String,
-    val createdAt: Instant,
-    val editedAt: Instant? = null,
-    val deletedAt: Instant? = null,
+class CommentEntity(
+    @Id var id: Long? = null,
+    var threadId: Long,
+    var createdInVersionId: Long,
+    var authorUserId: Long? = null,
+    var body: String,
+    var createdAt: Instant,
+    var editedAt: Instant? = null,
+    var deletedAt: Instant? = null,
 )

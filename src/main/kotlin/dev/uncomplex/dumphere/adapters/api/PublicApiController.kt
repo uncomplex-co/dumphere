@@ -5,6 +5,7 @@ import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.authenticatedUser
+import dev.uncomplex.dumphere.application.UserProvisioningService
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
@@ -18,13 +19,14 @@ import org.springframework.web.server.ResponseStatusException
 @RestController
 class PublicApiController(
     private val store: HtmlPageStore,
+    private val users: UserProvisioningService,
 ) {
     @PostMapping("/api/pages/{id}/visibility")
     fun visibility(
         @PathVariable id: String,
         @RequestBody request: SetVisibilityRequest,
         authentication: Authentication,
-    ): PublishedPage = store.setVisibility(id, request.visibility, authentication.authenticatedUser()) ?: throw notFound()
+    ): PublishedPage = store.setVisibility(id, request.visibility, resolveUser(authentication)) ?: throw notFound()
 
     @GetMapping("/api/pages/{id}")
     fun metadata(
@@ -45,7 +47,7 @@ class PublicApiController(
         authentication: Authentication,
     ): PublishFileResponse {
         val contentFormat = request.toPageContentFormat()
-        val page = store.publish(request.title, request.content, contentFormat, authentication.authenticatedUser())
+        val page = store.publish(request.title, request.content, contentFormat, resolveUser(authentication))
 
         return PublishFileResponse(page.url, page.version)
     }
@@ -55,7 +57,7 @@ class PublicApiController(
         @PathVariable id: String,
         @RequestBody request: UpdatePageRequest,
         authentication: Authentication,
-    ): PublishedPage = store.update(id, request.html, authentication.authenticatedUser()) ?: throw notFound()
+    ): PublishedPage = store.update(id, request.html, resolveUser(authentication)) ?: throw notFound()
 
     @PostMapping("/api/pages/{id}/live")
     fun setLive(
@@ -64,10 +66,11 @@ class PublicApiController(
         authentication: Authentication,
     ): PublishedPage {
         val page =
-            store.setLive(id, request.live, authentication.authenticatedUser())
+            store.setLive(id, request.live, resolveUser(authentication))
                 ?: throw notFound()
         return page
     }
+    private fun resolveUser(authentication: Authentication) = authentication.authenticatedUser()?.let(users::provision)
 }
 
 data class UpdatePageRequest(

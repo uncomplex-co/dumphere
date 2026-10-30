@@ -1,0 +1,5 @@
+/* Overrides inside Emoji Mart's shadow root. Never add focus rings to the viewer. */
+:host{width:100%;max-height:calc(100dvh - 72px);--font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--border-radius:0;--shadow:none;--rgb-accent:101,82,217;--rgb-background:255,255,255}
+:focus-visible{outline:none!important;box-shadow:none!important}
+#root>#nav{order:1}
+#root>.scroll{order:2}

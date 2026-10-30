@@ -31,6 +31,14 @@ object ArtifactViewerIds {
     const val COMMENT_POST = "comments-post-button"
     const val COMMENT_CANCEL = "comments-cancel-button"
     const val COMMENT_DRAG = "comments-drag-handle"
+    const val REACTION_ADD = "comment-reaction-add-button"
+    const val REACTION_PILL = "comment-reaction-button"
+    const val REACTION_PICKER = "comment-reaction-picker"
+    const val REACTION_SEARCH = "comment-reaction-search-input"
+    const val REACTION_EMOJI = "comment-reaction-emoji-button"
+    const val REACTION_CATEGORY = "comment-reaction-category-button"
+    const val REACTION_CLEAR = "comment-reaction-clear-search-button"
+    const val REACTION_QUICK = "comment-reaction-quick-button"
     const val COMMENT_RETRY = "comments-retry-button"
     const val THREAD_PIN = "comments-thread-pin"
     const val COMMENT = "artifact-comment"
@@ -46,7 +54,7 @@ object ArtifactViewerIds {
     const val THREAD_REOPEN = "discussion-reopen-button"
     const val THREAD_FILTER = "discussion-filter-button"
     const val THREAD = "artifact-comment-thread"
-    const val THREAD_REPLY = "comments-reply-button"
+    const val THREAD_REPLY = "comments-reply-input"
     const val START_DISCUSSION = "discussion-add-comment-button"
     const val TITLE_MENU = "artifact-title-menu-button"
     const val TITLE_SHARE = "artifact-menu-share-button"
@@ -119,6 +127,14 @@ class ArtifactViewer(
                 "COMMENT_POST_ID" to ArtifactViewerIds.COMMENT_POST,
                 "COMMENT_CANCEL_ID" to ArtifactViewerIds.COMMENT_CANCEL,
                 "COMMENT_DRAG_ID" to ArtifactViewerIds.COMMENT_DRAG,
+                "REACTION_ADD_ID" to ArtifactViewerIds.REACTION_ADD,
+                "REACTION_PILL_ID" to ArtifactViewerIds.REACTION_PILL,
+                "REACTION_PICKER_ID" to ArtifactViewerIds.REACTION_PICKER,
+                "REACTION_SEARCH_ID" to ArtifactViewerIds.REACTION_SEARCH,
+                "REACTION_EMOJI_ID" to ArtifactViewerIds.REACTION_EMOJI,
+                "REACTION_CATEGORY_ID" to ArtifactViewerIds.REACTION_CATEGORY,
+                "REACTION_CLEAR_ID" to ArtifactViewerIds.REACTION_CLEAR,
+                "REACTION_QUICK_ID" to ArtifactViewerIds.REACTION_QUICK,
                 "COMMENT_RETRY_ID" to ArtifactViewerIds.COMMENT_RETRY,
                 "THREAD_PIN_ID" to ArtifactViewerIds.THREAD_PIN,
                 "COMMENT_ID" to ArtifactViewerIds.COMMENT,

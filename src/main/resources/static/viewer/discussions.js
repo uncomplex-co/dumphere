@@ -66,6 +66,16 @@
       trailing.append(this.resolve, this.trigger);
       meta.append(details, trailing);
       this.body = element('p', 'comment-body');
+      this.content = element('div', 'comment-content');
+      this.react = button('Add emoji reaction', panel.reactionPicker.ids.addTestid, 'icon-reaction', 'icon-button comment-react');
+      this.react.setAttribute('aria-haspopup', 'dialog');
+      this.react.setAttribute('aria-controls', 'reaction-picker');
+      this.react.addEventListener('click', () => panel.state.change({
+        reactionPicker: panel.state.view.reactionPicker === id ? null : id, menuId: null
+      }));
+      this.content.append(this.body, this.react);
+      this.reactions = element('div', 'comment-reactions');
+      this.reactionButtons = new Map();
       this.menu = element('div', 'artifact-menu comment-menu');
       this.menu.id = 'comment-menu-' + id;
       this.menu.popover = 'auto';
@@ -109,7 +119,7 @@
         }
       });
       this.composer = panel.composer(this.key, 'Edit comment', 'Save', 'Saving...', true);
-      this.node.append(meta, this.body, this.menu, this.composer);
+      this.node.append(meta, this.content, this.reactions, this.menu, this.composer);
       this.node.addEventListener('click', event => {
         if (event.target.closest('button, comment-composer, [role="menu"]')) return;
         panel.select(this.record);
@@ -130,7 +140,7 @@
       const exists = data.comments.has(comment.id);
       const signature = JSON.stringify([first, view.selectedThreadId === comment.threadId,
         view.attached.has(comment.xpath), view.canManage, exists, view.resolutions.has(comment.threadId),
-        view.menuId === comment.id, draft?.body, draft?.pending, draft?.error, draft?.remoteDeleted, draft?.remoteChanged]);
+        view.menuId === comment.id, view.reactionPicker === comment.id, view.reacting.has(comment.id), draft?.body, draft?.pending, draft?.error, draft?.remoteDeleted, draft?.remoteChanged]);
       if (this.record === comment && this.signature === signature) return;
       this.signature = signature;
       const changed = this.record !== comment;
@@ -153,6 +163,30 @@
       toggle(this.node, 'is-attached', !!comment.xpath && view.attached.has(comment.xpath));
       this.number.hidden = !first || !comment.xpath;
       this.body.hidden = !!draft;
+      this.react.hidden = !view.canManage || !exists || !!draft;
+      this.react.disabled = view.reacting.has(comment.id);
+      attr(this.react, 'aria-expanded', view.reactionPicker === comment.id);
+      const reactions = comment.reactions || [];
+      const emojis = new Set(reactions.map(reaction => reaction.emoji));
+      for (const [emoji, node] of this.reactionButtons) if (!emojis.has(emoji)) { node.remove(); this.reactionButtons.delete(emoji); }
+      const pills = reactions.map(reaction => {
+        let node = this.reactionButtons.get(reaction.emoji);
+        if (!node) {
+          node = button('', this.panel.reactionPicker.ids.pillTestid, null, 'comment-reaction');
+          node.dataset.emoji = reaction.emoji;
+          node.addEventListener('click', () => this.panel.state.react(this.id, reaction.emoji));
+          this.reactionButtons.set(reaction.emoji, node);
+        }
+        text(node, reaction.emoji + ' ' + reaction.count);
+        const who = reaction.users.join(', ');
+        node.title = who + ' reacted with ' + reaction.emoji;
+        attr(node, 'aria-label', reaction.emoji + ', ' + reaction.count + ' reactions. ' + who + '. ' + (reaction.reacted ? 'Remove your reaction' : 'Add your reaction'));
+        attr(node, 'aria-pressed', reaction.reacted);
+        node.disabled = !view.canManage || !exists || view.reacting.has(comment.id);
+        return node;
+      });
+      place(this.reactions, pills);
+      this.reactions.hidden = !reactions.length || !!draft;
       this.resolve.hidden = !first || !!comment.resolvedAt || !view.canManage || !exists;
       this.resolve.disabled = view.resolutions.has(comment.threadId);
       this.edit.hidden = this.remove.hidden = !comment.canEdit || !exists;
@@ -187,15 +221,15 @@
       this.list.setAttribute('aria-label', 'Thread comments, oldest first');
       this.comments = new Map();
       this.footer = element('div', 'thread-reply');
-      this.reply = button('Reply...', panel.initial.replyTestid, null, 'thread-reply-button');
       this.key = 'reply:' + id;
       this.composer = panel.composer(this.key, 'Reply', 'Reply', 'Posting...');
       this.composer.setAttribute('compact', '');
-      this.reply.addEventListener('click', () => {
+      this.composer.setAttribute('persistent', '');
+      this.composer.dataset.bodyTestid = panel.initial.replyTestid;
+      this.composer.addEventListener('comment-activate', () => {
         panel.state.compose(this.key, { mode: 'reply', threadId: id });
-        this.composer.input.focus();
       });
-      this.footer.append(this.reply, this.composer);
+      this.footer.append(this.composer);
       this.node.append(this.list, this.footer);
     }
 
@@ -214,8 +248,7 @@
       const draft = view.composers.get(this.key);
       toggle(this.node, 'is-selected', view.selectedThreadId === thread.id);
       set(this.footer, 'hidden', view.selectedThreadId !== thread.id && !draft);
-      set(this.reply, 'hidden', !!draft);
-      set(this.reply, 'disabled', !thread.comments.some(comment => data.comments.has(comment.id)));
+      set(this.composer.input, 'disabled', !draft && !thread.comments.some(comment => data.comments.has(comment.id)));
       this.composer.render(draft);
     }
   }
@@ -229,6 +262,12 @@
       this.state = new DiscussionState(new DiscussionApi(id, csrf));
       Object.assign(this.state.view, context);
       this.threads = new Map();
+      this.reactionPicker = new ReactionPicker(this.state, id => {
+        for (const thread of this.threads.values()) {
+          const comment = thread.comments.get(id);
+          if (comment) return comment.react;
+        }
+      });
       this.ids = {
         resolve: $('discussion-filter').dataset.resolveTestid, reopen: $('discussion-filter').dataset.reopenTestid,
         delete: $('comment-delete-dialog').dataset.actionTestid
@@ -388,6 +427,7 @@
       const node = element('comment-composer', edit ? 'comment-edit-composer' : '');
       node.hidden = true;
       node.setAttribute('label', label);
+      node.setAttribute('placeholder', edit ? 'Edit your comment...' : 'Reply...');
       node.setAttribute('submit-label', submit);
       node.setAttribute('pending-label', pending);
       node.dataset.bodyTestid = edit ? this.initial.commentEditBodyTestid : this.initial.commentBodyTestid;
@@ -398,10 +438,14 @@
     }
 
     bindComposer(node, key) {
+      const cancel = () => {
+        this.state.cancel(key);
+        if (node.hasAttribute('persistent')) node.closest('.comment-thread')?.querySelector('.comment')?.focus({ preventScroll: true });
+      };
       node.addEventListener('comment-input', event => this.state.draft(key, event.detail.body));
-      node.addEventListener('comment-cancel', () => this.state.cancel(key));
+      node.addEventListener('comment-cancel', cancel);
       node.addEventListener('keydown', event => {
-        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.state.cancel(key); }
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); }
       });
       node.addEventListener('comment-submit', async () => {
         const submitted = this.state.view.composers.get(key);
@@ -409,7 +453,7 @@
           const current = this.state.view.composers.get(key);
           if (!this.state.view.open || (current && current !== submitted)) return;
           const id = this.state.view.selectedThreadId;
-          (this.threads.get(id)?.reply || $('comment-add')).focus({ preventScroll: true });
+          (this.threads.get(id)?.comments.values().next().value?.node || $('comment-add')).focus({ preventScroll: true });
         }
       });
     }
@@ -459,6 +503,7 @@
       nodes.push(...all.filter(thread => !visibleIds.has(thread.id)).map(thread => this.threads.get(thread.id).node));
       place($('comments-list'), nodes);
       for (const thread of this.threads.values()) for (const comment of thread.comments.values()) comment.syncMenu();
+      this.reactionPicker.render();
       const empty = data.comments.size === 0;
       set($('discussion-empty'), 'hidden', !empty || view.loading || !!view.error || view.composers.has('new'));
       text($('comments-status'), view.error || (view.loading && empty ? 'Loading comments...' : !visible.length && !empty ? 'No open discussions.' : ''));

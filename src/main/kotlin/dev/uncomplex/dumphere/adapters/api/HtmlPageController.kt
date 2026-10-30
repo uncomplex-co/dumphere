@@ -6,6 +6,7 @@ import dev.uncomplex.dumphere.application.PageContentRenderer
 import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.SamePageAppProperties
 import dev.uncomplex.dumphere.application.authenticatedUser
+import dev.uncomplex.dumphere.application.UserProvisioningService
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.CacheControl
 import org.springframework.http.ContentDisposition
@@ -30,12 +31,13 @@ class HtmlPageController(
     private val properties: SamePageAppProperties,
     private val access: ArtifactAccess,
     private val viewer: ArtifactViewer,
+    private val users: UserProvisioningService,
 ) {
     private val viewerSecurityPolicy =
         listOf(
             "default-src 'none'",
             "script-src 'self'",
-            "style-src 'self'",
+            "style-src 'self' 'sha256-I3QIFHoQipvvv7VFJz5JKfJGG0vZdYBUqM1UqySC14g='",
             "img-src 'self' https:",
             "frame-src 'self'",
             "connect-src 'self'",
@@ -167,7 +169,7 @@ class HtmlPageController(
     ): ResponseEntity<PublishedPage> {
         if (!access.isMember(authentication)) throw ResponseStatusException(HttpStatus.FORBIDDEN)
         val page =
-            store.setVisibility(id, request.visibility, authentication.authenticatedUser())
+            store.setVisibility(id, request.visibility, authentication.authenticatedUser()?.let(users::provision))
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(page)
     }

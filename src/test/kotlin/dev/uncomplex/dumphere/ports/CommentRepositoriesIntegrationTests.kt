@@ -48,6 +48,7 @@ class CommentRepositoriesIntegrationTests {
         val artifactId = UUID.randomUUID().toString()
         val now = Instant.parse("2026-10-24T12:00:00Z")
         val version = createArtifact(artifactId, now)
+        val versionId = assertNotNull(version.id)
         val thread =
             assertNotNull(
                 transactions.execute {
@@ -56,7 +57,7 @@ class CommentRepositoriesIntegrationTests {
                             CommentThreadEntity(
                                 artifactId = artifactId,
                                 number = 1,
-                                createdInVersionId = assertNotNull(version.id),
+                                createdInVersionId = versionId,
                                 createdAt = now,
                                 xpath = "/html/body/div[2]",
                                 relativeX = 0.25,
@@ -66,7 +67,7 @@ class CommentRepositoriesIntegrationTests {
                     comments.save(
                         CommentEntity(
                             threadId = assertNotNull(thread.id),
-                            createdInVersionId = version.id,
+                            createdInVersionId = versionId,
                             body = "<b>Plain text</b>\nSecond line",
                             createdAt = now,
                         ),
@@ -75,13 +76,18 @@ class CommentRepositoriesIntegrationTests {
                 },
             )
 
-        versions.save(version.copy(id = null, version = 2, html = "<main>Replacement</main>"))
+        versions.save(HtmlPageVersionEntity(pageId = artifactId, version = 2, html = "<main>Replacement</main>",
+            bytes = 24, createdAt = now))
         jdbc.update("update html_pages set current_version = 2 where id = ?", artifactId)
 
-        val stored = threads.findById(assertNotNull(thread.id)).orElseThrow()
-        assertEquals(thread, stored)
+        val threadId = assertNotNull(thread.id)
+        val stored = threads.findById(threadId).orElseThrow()
+        assertEquals(version.id, stored.createdInVersionId)
+        assertEquals("/html/body/div[2]", stored.xpath)
+        assertEquals(0.25, stored.relativeX)
+        assertEquals(0.75, stored.relativeY)
         assertNull(stored.createdByUserId)
-        val message = comments.findAllByThreadIdOrderByCreatedAtAscIdAsc(thread.id).single()
+        val message = comments.findAllByThreadIdOrderByCreatedAtAscIdAsc(threadId).single()
         assertEquals(version.id, message.createdInVersionId)
         assertNull(message.authorUserId)
         assertEquals("<b>Plain text</b>\nSecond line", message.body)
@@ -92,7 +98,9 @@ class CommentRepositoriesIntegrationTests {
         val artifactId = UUID.randomUUID().toString()
         val now = Instant.parse("2026-10-24T12:00:00Z")
         val firstVersion = createArtifact(artifactId, now)
-        val secondVersion = versions.save(firstVersion.copy(id = null, version = 2))
+        val firstVersionId = assertNotNull(firstVersion.id)
+        val secondVersion = versions.save(HtmlPageVersionEntity(pageId = artifactId, version = 2, html = firstVersion.html,
+            bytes = firstVersion.bytes, createdAt = now))
         val author = users.save(UserEntity(subject = UUID.randomUUID().toString(), createdAt = now, updatedAt = now))
         val thread =
             assertNotNull(
@@ -102,7 +110,7 @@ class CommentRepositoriesIntegrationTests {
                             CommentThreadEntity(
                                 artifactId = artifactId,
                                 number = 1,
-                                createdInVersionId = assertNotNull(firstVersion.id),
+                                createdInVersionId = firstVersionId,
                                 createdByUserId = author.id,
                                 createdAt = now,
                             ),
@@ -110,7 +118,7 @@ class CommentRepositoriesIntegrationTests {
                     comments.save(
                         CommentEntity(
                             threadId = assertNotNull(thread.id),
-                            createdInVersionId = firstVersion.id,
+                            createdInVersionId = firstVersionId,
                             authorUserId = author.id,
                             body = "First comment",
                             createdAt = now,
@@ -120,10 +128,11 @@ class CommentRepositoriesIntegrationTests {
                 },
             )
 
+        val threadId = assertNotNull(thread.id)
         val reply =
             comments.save(
                 CommentEntity(
-                    threadId = assertNotNull(thread.id),
+                    threadId = threadId,
                     createdInVersionId = assertNotNull(secondVersion.id),
                     authorUserId = author.id,
                     body = "Reply on the newer version",
@@ -131,13 +140,13 @@ class CommentRepositoriesIntegrationTests {
                 ),
             )
 
-        assertEquals(listOf(thread), threads.findAllByArtifactIdOrderByCreatedAtAscIdAsc(artifactId))
-        assertNull(threads.findById(thread.id).orElseThrow().xpath)
-        val messages = comments.findAllByThreadIdOrderByCreatedAtAscIdAsc(thread.id)
+        assertEquals(listOf(threadId), threads.findAllByArtifactIdOrderByCreatedAtAscIdAsc(artifactId).map { it.id })
+        assertNull(threads.findById(threadId).orElseThrow().xpath)
+        val messages = comments.findAllByThreadIdOrderByCreatedAtAscIdAsc(threadId)
         assertEquals(listOf(firstVersion.id, secondVersion.id), messages.map { it.createdInVersionId })
         assertEquals(listOf(author.id, author.id), messages.map { it.authorUserId })
-        assertEquals(reply, messages.last())
-        assertEquals(reply, comments.findById(assertNotNull(reply.id)).orElseThrow())
+        assertEquals(reply.id, messages.last().id)
+        assertEquals("Reply on the newer version", comments.findById(assertNotNull(reply.id)).orElseThrow().body)
     }
 
     private fun createArtifact(

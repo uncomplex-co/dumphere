@@ -4,6 +4,7 @@ import dev.uncomplex.dumphere.application.ArtifactVisibility
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.authenticatedUser
+import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.mcp.tools.EditFileContentsTool
 import dev.uncomplex.dumphere.application.mcp.tools.PublishHtmlTool
 import dev.uncomplex.dumphere.application.mcp.tools.ReadFileContentsTool
@@ -22,6 +23,7 @@ class HtmlshareMcpTools(
     private val editFileContentsTool: EditFileContentsTool,
     private val setPageLiveTool: SetPageLiveTool,
     private val store: HtmlPageStore,
+    private val users: UserProvisioningService,
 ) {
     @McpTool(
         name = "get_artifact_metadata",
@@ -140,5 +142,5 @@ class HtmlshareMcpTools(
         live: Boolean,
     ): PublishedPage = setPageLiveTool.execute(id, live, currentUser())
 
-    private fun currentUser() = SecurityContextHolder.getContext().authentication.authenticatedUser()
+    private fun currentUser() = SecurityContextHolder.getContext().authentication.authenticatedUser()?.let(users::provision)
 }

@@ -36,4 +36,5 @@ class DiscussionApi {
 
   resolve(threadId, resolved) { return this.request('/threads/' + threadId + '/resolution', 'PATCH', { resolved }); }
   remove(commentId) { return this.request('/comments/' + commentId, 'DELETE'); }
+  react(commentId, emoji, reacted) { return this.request('/comments/' + commentId + '/reaction', 'PUT', { emoji, reacted }); }
 }

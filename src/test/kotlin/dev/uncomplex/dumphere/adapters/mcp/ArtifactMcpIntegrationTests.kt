@@ -15,8 +15,10 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin
 import tools.jackson.databind.ObjectMapper
 import java.sql.Timestamp
 import java.time.Instant
@@ -141,6 +143,76 @@ class ArtifactMcpIntegrationTests {
 
     private fun deadline(id: String) =
         jdbc.queryForObject("select public_until from html_pages where id = ?", Timestamp::class.java, id)?.toInstant()
+
+    @Test
+    fun `MCP comment reads include each emoji and its author on the correct comment`() {
+        val token = jwtEncoder.encode(JwtEncoderParameters.from(
+            JwtClaimsSet.builder().subject("reaction-reading-agent").claim("email", "agent@example.com")
+                .claim("name", "Agent").issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(120)).build(),
+        )).tokenValue
+        McpTestClient(port, token, json).use { client ->
+            client.initialize()
+            val id = client.metadata(client.call("publish_html", mapOf("contents" to "# Review", "format" to "markdown")))
+                .path("id").asString()
+            val root = client.metadata(client.call("start_discussion_thread", mapOf("id" to id, "body" to "Root")))
+            val thread = root.path("threadId").asLong()
+            val reply = client.metadata(client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to "Reply")))
+            val untouched = client.metadata(client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to "No reactions")))
+            mvc.perform(put("/p/$id/comments/${root.path("id").asLong()}/reaction")
+                .header("Authorization", "Bearer $token").with(csrf()).contentType("application/json")
+                .content("""{"emoji":"👍","reacted":true}"""))
+                .andExpect(status().isOk)
+            mvc.perform(put("/p/$id/comments/${root.path("id").asLong()}/reaction")
+                .with(oidcLogin().idToken { it.subject("reaction-reviewer").claim("email", "reviewer@example.com").claim("name", "Reviewer") })
+                .with(csrf()).contentType("application/json").content("""{"emoji":"👍","reacted":true}"""))
+                .andExpect(status().isOk)
+            mvc.perform(put("/p/$id/comments/${reply.path("id").asLong()}/reaction")
+                .header("Authorization", "Bearer $token").with(csrf()).contentType("application/json")
+                .content("""{"emoji":"🎉","reacted":true}"""))
+                .andExpect(status().isOk)
+
+            val result = client.metadata(client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread)))
+
+            val records = result.asArray().values().associateBy { it.path("id").asLong() }
+            assertEquals(json.readTree("""[{"emoji":"👍","author":"Agent"},{"emoji":"👍","author":"Reviewer"}]"""),
+                records.getValue(root.path("id").asLong()).path("reactions"))
+            assertEquals(json.readTree("""[{"emoji":"🎉","author":"Agent"}]"""),
+                records.getValue(reply.path("id").asLong()).path("reactions"))
+            assertTrue(records.getValue(untouched.path("id").asLong()).path("reactions").isEmpty)
+            assertEquals(3, jdbc.queryForObject("select count(*) from comment_reactions r join comments c on c.id = r.comment_id where c.thread_id = ?", Int::class.java, thread))
+        }
+    }
+
+    @Test
+    fun `MCP thread summaries include only their root comment's authored reactions`() {
+        val token = jwtEncoder.encode(JwtEncoderParameters.from(
+            JwtClaimsSet.builder().subject("thread-reaction-agent").claim("email", "agent@example.com")
+                .claim("name", "Agent").issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(120)).build(),
+        )).tokenValue
+        McpTestClient(port, token, json).use { client ->
+            client.initialize()
+            val id = client.metadata(client.call("publish_html", mapOf("contents" to "# Review", "format" to "markdown")))
+                .path("id").asString()
+            val root = client.metadata(client.call("start_discussion_thread", mapOf("id" to id, "body" to "Root")))
+            val thread = root.path("threadId").asLong()
+            val other = client.metadata(client.call("start_discussion_thread", mapOf("id" to id, "body" to "Other root")))
+            val reply = client.metadata(client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to "Reply")))
+            mvc.perform(put("/p/$id/comments/${root.path("id").asLong()}/reaction")
+                .header("Authorization", "Bearer $token").with(csrf()).contentType("application/json")
+                .content("""{"emoji":"👍","reacted":true}"""))
+                .andExpect(status().isOk)
+            mvc.perform(put("/p/$id/comments/${reply.path("id").asLong()}/reaction")
+                .header("Authorization", "Bearer $token").with(csrf()).contentType("application/json")
+                .content("""{"emoji":"🎉","reacted":true}"""))
+                .andExpect(status().isOk)
+
+            val result = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
+
+            val summaries = result.asArray().values().associateBy { it.path("threadId").asLong() }
+            assertEquals(json.readTree("""[{"emoji":"👍","author":"Agent"}]"""), summaries.getValue(thread).path("reactions"))
+            assertTrue(summaries.getValue(other.path("threadId").asLong()).path("reactions").isEmpty)
+        }
+    }
 
     @Test
     fun agentsDiscussArtifactsAcrossVersionsWithoutMixingThreadsOrChangingContent() {

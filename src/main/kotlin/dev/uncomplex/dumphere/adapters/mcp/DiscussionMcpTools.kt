@@ -1,11 +1,13 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
+import dev.uncomplex.dumphere.adapters.ReactionEmojiCatalog
 import dev.uncomplex.dumphere.application.ArtifactComment
-import dev.uncomplex.dumphere.application.ArtifactCommentThread
 import dev.uncomplex.dumphere.application.ArtifactComments
 import dev.uncomplex.dumphere.application.HtmlPageStore
 import dev.uncomplex.dumphere.application.DiscussionThreadState
 import dev.uncomplex.dumphere.application.authenticatedUser
+import dev.uncomplex.dumphere.application.UserProvisioningService
+import dev.uncomplex.dumphere.application.SetCommentReactionUsecase
 import dev.uncomplex.dumphere.ports.CommentThreadRepository
 import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
 import org.springframework.ai.mcp.annotation.McpTool
@@ -19,29 +21,32 @@ class DiscussionMcpTools(
     private val pages: HtmlPageStore,
     private val threads: CommentThreadRepository,
     private val versions: HtmlPageVersionRepository,
+    private val users: UserProvisioningService,
+    private val setReaction: SetCommentReactionUsecase,
+    private val emojiCatalog: ReactionEmojiCatalog,
 ) {
     @McpTool(
         name = "list_discussion_threads",
-        description = "List all non-deleted discussion threads for an artifact, including resolved threads, newest activity first. Includes first comment text, reply count, author, any element anchor, and resolvedAt (null for open threads). Threads persist across artifact versions.",
+        description = "List an artifact's discussion threads.",
     )
     fun listDiscussionThreads(
         @McpToolParam(description = "Published artifact id", required = true) id: String,
-    ): List<ArtifactCommentThread> {
+    ): List<DiscussionThread> {
         requirePage(id)
-        return comments.listThreads(id)
+        return comments.listThreads(id).map(DiscussionThread::from)
     }
 
     @McpTool(
         name = "list_thread_comments",
-        description = "List the first comment and all replies in an artifact discussion thread, oldest first.",
+        description = "Read a discussion thread's comments, replies, and reactions.",
     )
     fun listThreadComments(
         @McpToolParam(description = "Published artifact id", required = true) id: String,
         @McpToolParam(description = "Discussion thread id", required = true) thread_id: Long,
-    ): List<ArtifactComment> {
+    ): List<DiscussionComment> {
         requirePage(id)
         requireThread(id, thread_id)
-        return comments.listThread(id, thread_id)
+        return comments.listThread(id, thread_id).map(DiscussionComment::from)
     }
 
     @McpTool(
@@ -64,6 +69,29 @@ class DiscussionMcpTools(
     ): ArtifactComment {
         val versionId = currentVersionId(id)
         return comments.reply(requireThread(id, thread_id), versionId, validatedBody(body), currentUser())
+    }
+
+    @McpTool(name = "add_comment_reaction", description = "Add your emoji reaction to a comment.")
+    fun addCommentReaction(
+        @McpToolParam(description = "Published artifact id", required = true) id: String,
+        @McpToolParam(description = "Comment id", required = true) comment_id: Long,
+        @McpToolParam(description = "Emoji without a skin-tone modifier", required = true) emoji: String,
+    ): DiscussionReactions = react(id, comment_id, emoji, true)
+
+    @McpTool(name = "remove_comment_reaction", description = "Remove your emoji reaction from a comment.")
+    fun removeCommentReaction(
+        @McpToolParam(description = "Published artifact id", required = true) id: String,
+        @McpToolParam(description = "Comment id", required = true) comment_id: Long,
+        @McpToolParam(description = "Emoji without a skin-tone modifier", required = true) emoji: String,
+    ): DiscussionReactions = react(id, comment_id, emoji, false)
+
+    private fun react(id: String, commentId: Long, emoji: String, reacted: Boolean): DiscussionReactions {
+        requirePage(id)
+        require(emojiCatalog.contains(emoji)) { "Unsupported reaction emoji" }
+        return when (val result = setReaction.execute(SetCommentReactionUsecase.Command(id, commentId, emoji, reacted, currentUser()))) {
+            is SetCommentReactionUsecase.Result.Success -> DiscussionReactions(result.state.commentId, DiscussionReaction.from(result.state.reactions))
+            SetCommentReactionUsecase.Result.NotFound -> throw IllegalArgumentException("comment not found: $commentId")
+        }
     }
 
     @McpTool(name = "resolve_discussion_thread", description = "Resolve a discussion thread without deleting its comments. Already-resolved threads are unchanged.")
@@ -98,7 +126,7 @@ class DiscussionMcpTools(
         require(it.isNotEmpty() && it.length <= 10000) { "Comment must contain between 1 and 10000 characters" }
     }
 
-    private fun currentUser() = requireNotNull(SecurityContextHolder.getContext().authentication.authenticatedUser()) {
+    private fun currentUser() = users.provision(requireNotNull(SecurityContextHolder.getContext().authentication.authenticatedUser()) {
         "Authentication required"
-    }
+    })
 }
