@@ -2,7 +2,7 @@ package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.AuthenticatedUser
 import dev.uncomplex.dumphere.application.UserProvisioningService
-import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
 import org.springframework.beans.factory.annotation.Autowired
@@ -57,7 +57,7 @@ class ArtifactSharingIntegrationTests {
 
     @Autowired private lateinit var jdbc: JdbcTemplate
 
-    @Autowired private lateinit var pages: HtmlPageStore
+    @Autowired private lateinit var pages: PublishedArtifactsStore
     @Autowired private lateinit var users: UserProvisioningService
 
     companion object {
@@ -1291,7 +1291,10 @@ class ArtifactSharingIntegrationTests {
     private fun member(
         email: String = "alex@example.com",
         subject: String = "different-team-member",
-    ) = oidcLogin()
+    ) = oidcLogin().also {
+        // Mock authentication skips the real authentication-success event.
+        users.provision(AuthenticatedUser(subject, email, "Alex Morgan"))
+    }
         .idToken {
             it
                 .subject(

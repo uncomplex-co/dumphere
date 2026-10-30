@@ -1,5 +1,7 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
+import dev.uncomplex.dumphere.application.AuthenticatedUser
+import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.testing.McpTestClient
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
 import org.springframework.beans.factory.annotation.Autowired
@@ -52,6 +54,7 @@ class ArtifactMcpIntegrationTests {
 
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var mvc: MockMvc
+    @Autowired private lateinit var users: UserProvisioningService
 
     companion object {
         @JvmStatic
@@ -162,6 +165,7 @@ class ArtifactMcpIntegrationTests {
                 .header("Authorization", "Bearer $token").with(csrf()).contentType("application/json")
                 .content("""{"emoji":"👍","reacted":true}"""))
                 .andExpect(status().isOk)
+            users.provision(AuthenticatedUser("reaction-reviewer", "reviewer@example.com", "Reviewer"))
             mvc.perform(put("/p/$id/comments/${root.path("id").asLong()}/reaction")
                 .with(oidcLogin().idToken { it.subject("reaction-reviewer").claim("email", "reviewer@example.com").claim("name", "Reviewer") })
                 .with(csrf()).contentType("application/json").content("""{"emoji":"👍","reacted":true}"""))

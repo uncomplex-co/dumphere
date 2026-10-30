@@ -1,10 +1,20 @@
-package dev.uncomplex.dumphere.application
+package dev.uncomplex.dumphere.adapters.persistence
 
+import dev.uncomplex.dumphere.application.ArtifactAuthor
+import dev.uncomplex.dumphere.application.ArtifactSharing
+import dev.uncomplex.dumphere.application.ArtifactVisibility
+import dev.uncomplex.dumphere.application.HtmlDocumentEditor
+import dev.uncomplex.dumphere.application.HtmlPageEntity
+import dev.uncomplex.dumphere.application.HtmlPageVersionEntity
+import dev.uncomplex.dumphere.application.PageContentFormat
+import dev.uncomplex.dumphere.application.PublishedPage
+import dev.uncomplex.dumphere.application.SamePageAppProperties
+import dev.uncomplex.dumphere.application.UserEntity
 import dev.uncomplex.dumphere.ports.HtmlPageRepository
 import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
 import dev.uncomplex.dumphere.ports.UserRepository
-import org.springframework.data.jdbc.core.JdbcAggregateTemplate
-import org.springframework.stereotype.Service
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
+import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
@@ -15,19 +25,18 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Base64
 
-@Service
-class HtmlPageStore(
+@Repository
+class JdbcPublishedArtifactsStore(
     private val properties: SamePageAppProperties,
     private val objectMapper: ObjectMapper,
     private val pages: HtmlPageRepository,
     private val versions: HtmlPageVersionRepository,
-    private val jdbcAggregateTemplate: JdbcAggregateTemplate,
     private val users: UserRepository,
-) {
+) : PublishedArtifactsStore {
     private val random = SecureRandom()
 
     @Transactional
-    fun publish(
+    override fun publish(
         title: String?,
         contents: String,
         contentFormat: PageContentFormat,
@@ -54,13 +63,13 @@ class HtmlPageStore(
                 bytes = bytes.size.toLong(),
             )
 
-        jdbcAggregateTemplate.insert(page.toEntity(createdByUserId = user?.id))
+        pages.insert(page.toEntity(createdByUserId = user?.id))
         versions.save(page.toVersionEntity(contents, page.createdAt, user?.id))
 
         return page
     }
 
-    fun readContents(id: String): String? {
+    override fun readContents(id: String): String? {
         if (!id.matches(ID_PATTERN)) return null
 
         val page = pages.findById(id).orElse(null) ?: return null
@@ -68,7 +77,7 @@ class HtmlPageStore(
     }
 
     @Transactional
-    fun update(
+    override fun update(
         id: String,
         contents: String,
         updatedBy: UserEntity?,
@@ -95,7 +104,7 @@ class HtmlPageStore(
     }
 
     @Transactional
-    fun edit(
+    override fun edit(
         id: String,
         oldString: String,
         newString: String,
@@ -118,14 +127,14 @@ class HtmlPageStore(
         return update(id, nextContents, updatedBy)
     }
 
-    fun readMetadata(id: String): PublishedPage? {
+    override fun readMetadata(id: String): PublishedPage? {
         if (!id.matches(ID_PATTERN)) return null
 
         return pages.findById(id).map { it.toPublishedPage() }.orElse(null)
     }
 
     @Transactional
-    fun setLive(
+    override fun setLive(
         id: String,
         isLive: Boolean,
         updatedBy: UserEntity?,
@@ -141,7 +150,7 @@ class HtmlPageStore(
     }
 
     @Transactional
-    fun setVisibility(
+    override fun setVisibility(
         id: String,
         visibility: ArtifactVisibility,
         updatedBy: UserEntity?,
@@ -165,7 +174,7 @@ class HtmlPageStore(
     }
 
     @Transactional
-    fun setCustomMetadata(
+    override fun setCustomMetadata(
         id: String,
         key: String,
         value: Any?,

@@ -7,6 +7,23 @@ import org.springframework.data.repository.CrudRepository
 import java.time.Instant
 
 interface HtmlPageRepository : CrudRepository<HtmlPageEntity, String> {
+    @Modifying
+    @Query(
+        """
+        insert into html_pages (
+            id, title, url, content_format, created_at, created_by_user_id,
+            updated_at, updated_by_user_id, current_version, current_bytes, is_live, public_until
+        ) values (
+            :#{#page.id}, :#{#page.title}, :#{#page.url}, :#{#page.contentFormat.name()},
+            cast(:#{#page.createdAt.toString()} as timestamptz), :#{#page.createdByUserId},
+            cast(:#{#page.updatedAt?.toString()} as timestamptz), :#{#page.updatedByUserId},
+            :#{#page.currentVersion}, :#{#page.currentBytes}, :#{#page.isLive},
+            cast(:#{#page.publicUntil?.toString()} as timestamptz)
+        )
+        """,
+    )
+    fun insert(page: HtmlPageEntity): Int
+
     @Query("select custom_metadata::text from html_pages where id = :id")
     fun readCustomMetadata(id: String): String?
 

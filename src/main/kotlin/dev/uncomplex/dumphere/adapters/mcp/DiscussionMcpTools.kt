@@ -3,10 +3,9 @@ package dev.uncomplex.dumphere.adapters.mcp
 import dev.uncomplex.dumphere.adapters.ReactionEmojiCatalog
 import dev.uncomplex.dumphere.application.ArtifactComment
 import dev.uncomplex.dumphere.application.ArtifactComments
-import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.application.DiscussionThreadState
-import dev.uncomplex.dumphere.application.authenticatedUser
-import dev.uncomplex.dumphere.application.UserProvisioningService
+import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
 import dev.uncomplex.dumphere.application.SetCommentReactionUsecase
 import dev.uncomplex.dumphere.ports.CommentThreadRepository
 import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
@@ -18,10 +17,10 @@ import org.springframework.stereotype.Component
 @Component
 class DiscussionMcpTools(
     private val comments: ArtifactComments,
-    private val pages: HtmlPageStore,
+    private val pages: PublishedArtifactsStore,
     private val threads: CommentThreadRepository,
     private val versions: HtmlPageVersionRepository,
-    private val users: UserProvisioningService,
+    private val users: AuthenticatedUsers,
     private val setReaction: SetCommentReactionUsecase,
     private val emojiCatalog: ReactionEmojiCatalog,
 ) {
@@ -126,7 +125,7 @@ class DiscussionMcpTools(
         require(it.isNotEmpty() && it.length <= 10000) { "Comment must contain between 1 and 10000 characters" }
     }
 
-    private fun currentUser() = users.provision(requireNotNull(SecurityContextHolder.getContext().authentication.authenticatedUser()) {
+    private fun currentUser() = requireNotNull(users.resolve(SecurityContextHolder.getContext().authentication)) {
         "Authentication required"
-    })
+    }
 }

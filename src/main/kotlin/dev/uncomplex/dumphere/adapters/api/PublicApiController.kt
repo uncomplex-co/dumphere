@@ -1,11 +1,10 @@
 package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.ArtifactVisibility
-import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PublishedPage
-import dev.uncomplex.dumphere.application.authenticatedUser
-import dev.uncomplex.dumphere.application.UserProvisioningService
+import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
@@ -18,8 +17,8 @@ import org.springframework.web.server.ResponseStatusException
 
 @RestController
 class PublicApiController(
-    private val store: HtmlPageStore,
-    private val users: UserProvisioningService,
+    private val store: PublishedArtifactsStore,
+    private val users: AuthenticatedUsers,
 ) {
     @PostMapping("/api/pages/{id}/visibility")
     fun visibility(
@@ -70,7 +69,7 @@ class PublicApiController(
                 ?: throw notFound()
         return page
     }
-    private fun resolveUser(authentication: Authentication) = authentication.authenticatedUser()?.let(users::provision)
+    private fun resolveUser(authentication: Authentication) = users.resolve(authentication)
 }
 
 data class UpdatePageRequest(

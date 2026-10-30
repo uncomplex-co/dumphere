@@ -1,12 +1,11 @@
 package dev.uncomplex.dumphere.adapters.api
 
-import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PageContentRenderer
 import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.SamePageAppProperties
-import dev.uncomplex.dumphere.application.authenticatedUser
-import dev.uncomplex.dumphere.application.UserProvisioningService
+import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.CacheControl
 import org.springframework.http.ContentDisposition
@@ -26,12 +25,12 @@ import java.nio.charset.StandardCharsets.UTF_8
 
 @RestController
 class HtmlPageController(
-    private val store: HtmlPageStore,
+    private val store: PublishedArtifactsStore,
     private val renderer: PageContentRenderer,
     private val properties: SamePageAppProperties,
     private val access: ArtifactAccess,
     private val viewer: ArtifactViewer,
-    private val users: UserProvisioningService,
+    private val users: AuthenticatedUsers,
 ) {
     private val viewerSecurityPolicy =
         listOf(
@@ -169,7 +168,7 @@ class HtmlPageController(
     ): ResponseEntity<PublishedPage> {
         if (!access.isMember(authentication)) throw ResponseStatusException(HttpStatus.FORBIDDEN)
         val page =
-            store.setVisibility(id, request.visibility, authentication.authenticatedUser()?.let(users::provision))
+            store.setVisibility(id, request.visibility, users.resolve(authentication))
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(page)
     }

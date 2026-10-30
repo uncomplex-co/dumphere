@@ -2,10 +2,8 @@ package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.adapters.mcp.OAuthMetadataEntryPoint
 import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
-import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.application.SamePageAppProperties
-import dev.uncomplex.dumphere.application.UserProvisioningService
-import dev.uncomplex.dumphere.application.authenticatedUser
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
@@ -41,9 +39,8 @@ class SecurityConfig(
     private val properties: SamePageAppProperties,
     private val clientRegistrationRepository: ClientRegistrationRepository,
     private val allowedEmailDomainPolicy: AllowedEmailDomainPolicy,
-    private val userProvisioning: UserProvisioningService,
     private val artifactAccess: ArtifactAccess,
-    private val pages: HtmlPageStore,
+    private val pages: PublishedArtifactsStore,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -169,8 +166,6 @@ class SecurityConfig(
                 response.sendError(HttpStatus.FORBIDDEN.value(), "email domain not allowed")
                 return@AuthenticationSuccessHandler
             }
-
-            authentication.authenticatedUser()?.let { userProvisioning.provision(it) }
 
             val redirectUrl = RedirectUrlSupport.take(request.getSession(false), request.getParameter("state"))
             logger.info("Browser login completed: returnUrlPresent={}", redirectUrl != null)

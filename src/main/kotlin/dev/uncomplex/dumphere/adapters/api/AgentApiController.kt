@@ -1,7 +1,6 @@
 package dev.uncomplex.dumphere.adapters.api
 
-import dev.uncomplex.dumphere.application.authenticatedUser
-import dev.uncomplex.dumphere.application.UserProvisioningService
+import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
 import dev.uncomplex.dumphere.application.mcp.tools.EditFileContentsTool
 import dev.uncomplex.dumphere.application.mcp.tools.ReadFileContentsTool
 import org.springframework.security.core.Authentication
@@ -18,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController
 class AgentApiController(
     private val readFileContentsTool: ReadFileContentsTool,
     private val editFileContentsTool: EditFileContentsTool,
-    private val users: UserProvisioningService,
+    private val users: AuthenticatedUsers,
 ) {
     @GetMapping("/{id}/contents")
     fun contents(
@@ -38,7 +37,7 @@ class AgentApiController(
             request.oldString,
             request.newString,
             request.replaceAll ?: false,
-            authentication.authenticatedUser()?.let(users::provision),
+            users.resolve(authentication),
         )
 }
 

@@ -3,7 +3,7 @@ package dev.uncomplex.dumphere.adapters.api
 import dev.uncomplex.dumphere.application.AuthenticatedUser
 import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.ArtifactVisibility
-import dev.uncomplex.dumphere.application.HtmlPageStore
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
 import org.junit.jupiter.params.ParameterizedTest
@@ -37,7 +37,7 @@ import kotlin.test.assertTrue
 @AutoConfigureMockMvc
 class CommentReactionsIntegrationTests {
     @Autowired private lateinit var mvc: MockMvc
-    @Autowired private lateinit var pages: HtmlPageStore
+    @Autowired private lateinit var pages: PublishedArtifactsStore
     @Autowired private lateinit var users: UserProvisioningService
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var json: ObjectMapper
@@ -47,7 +47,9 @@ class CommentReactionsIntegrationTests {
         fun database(registry: DynamicPropertyRegistry) = PostgresTestDatabase.configure(registry)
     }
 
-    private fun member(subject: String = "reaction-alice") = oidcLogin().idToken {
+    private fun member(subject: String = "reaction-alice") = oidcLogin().also {
+        users.provision(AuthenticatedUser(subject, "$subject@example.com", subject))
+    }.idToken {
         it.subject(subject).claim("email", "$subject@example.com").claim("name", subject)
     }
 

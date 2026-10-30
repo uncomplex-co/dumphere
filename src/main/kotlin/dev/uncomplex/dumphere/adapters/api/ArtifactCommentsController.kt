@@ -9,9 +9,8 @@ import dev.uncomplex.dumphere.application.DeleteCommentResult
 import dev.uncomplex.dumphere.application.DiscussionThreadState
 import dev.uncomplex.dumphere.application.CommentReactionState
 import dev.uncomplex.dumphere.application.SetCommentReactionUsecase
-import dev.uncomplex.dumphere.application.UserProvisioningService
-import dev.uncomplex.dumphere.application.HtmlPageStore
-import dev.uncomplex.dumphere.application.authenticatedUser
+import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.ports.CommentThreadRepository
 import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
 import org.springframework.http.CacheControl
@@ -33,13 +32,13 @@ import javax.xml.xpath.XPathFactory
 @RestController
 class ArtifactCommentsController(
     private val comments: ArtifactComments,
-    private val pages: HtmlPageStore,
+    private val pages: PublishedArtifactsStore,
     private val versions: HtmlPageVersionRepository,
     private val access: ArtifactAccess,
     private val threads: CommentThreadRepository,
     private val setReaction: SetCommentReactionUsecase,
     private val emojiCatalog: ReactionEmojiCatalog,
-    private val users: UserProvisioningService,
+    private val users: AuthenticatedUsers,
 ) {
     @GetMapping("/p/{id}/comments")
     fun list(
@@ -172,7 +171,7 @@ class ArtifactCommentsController(
     }
 
     private fun resolveUser(authentication: Authentication?) =
-        authentication.takeIf { access.isMember(it) }.authenticatedUser()?.let(users::provision)
+        users.resolve(authentication.takeIf { access.isMember(it) })
 
     private fun validatedBody(value: String): String {
         val body = value.trim()
