@@ -1,6 +1,6 @@
 services:
   lgtm:
-    image: grafana/otel-lgtm:0.38.1
+    image: grafana/otel-lgtm:latest
     ports:
       - "127.0.0.1:7333:3000"
       - "127.0.0.1:4318:4318"
