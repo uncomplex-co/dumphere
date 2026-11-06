@@ -42,7 +42,8 @@ object HtmlDocumentEditor {
 
         if (notFound) {
             error(
-                "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
+                "Could not find oldString in the file. " +
+                    "It must match exactly, including whitespace, indentation, and line endings."
             )
         }
 

@@ -46,18 +46,18 @@ import tools.jackson.databind.ObjectMapper
         ],
 )
 @AutoConfigureMockMvc
-class ArtifactMcpIntegrationTests {
-    @LocalServerPort private var port: Int = 0
+abstract class ArtifactMcpTestSupport {
+    @LocalServerPort protected var port: Int = 0
 
-    @Autowired private lateinit var jwtEncoder: JwtEncoder
+    @Autowired protected lateinit var jwtEncoder: JwtEncoder
 
-    @Autowired private lateinit var json: ObjectMapper
+    @Autowired protected lateinit var json: ObjectMapper
 
-    @Autowired private lateinit var jdbc: JdbcTemplate
+    @Autowired protected lateinit var jdbc: JdbcTemplate
 
-    @Autowired private lateinit var mvc: MockMvc
+    @Autowired protected lateinit var mvc: MockMvc
 
-    @Autowired private lateinit var users: UserProvisioningService
+    @Autowired protected lateinit var users: UserProvisioningService
 
     companion object {
         @JvmStatic
@@ -65,6 +65,22 @@ class ArtifactMcpIntegrationTests {
         fun database(registry: DynamicPropertyRegistry) = PostgresTestDatabase.configure(registry)
     }
 
+    protected fun deadline(id: String) =
+        jdbc.queryForObject("select public_until from html_pages where id = ?", Timestamp::class.java, id)?.toInstant()
+
+    protected fun contents(id: String) =
+        jdbc.queryForObject(
+            """
+            select v.html from html_page_versions v join html_pages p
+            on p.id = v.page_id and p.current_version = v.version where p.id = ?
+            """
+                .trimIndent(),
+            String::class.java,
+            id,
+        )
+}
+
+class ArtifactMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun agentsPublishInspectShareEditAndRevokeWithoutRenewingAccess() {
         val now = Instant.now()
@@ -188,16 +204,9 @@ class ArtifactMcpIntegrationTests {
             )
         }
     }
+}
 
-    private fun deadline(id: String) =
-        jdbc
-            .queryForObject(
-                "select public_until from html_pages where id = ?",
-                Timestamp::class.java,
-                id,
-            )
-            ?.toInstant()
-
+class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun `MCP comment reads include each emoji and its author on the correct comment`() {
         val token =
@@ -372,7 +381,9 @@ class ArtifactMcpIntegrationTests {
             assertTrue(summaries.getValue(other.path("threadId").asLong()).path("reactions").isEmpty)
         }
     }
+}
 
+class ArtifactDiscussionsMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun agentsDiscussArtifactsAcrossVersionsWithoutMixingThreadsOrChangingContent() {
         val token =
@@ -550,7 +561,11 @@ class ArtifactMcpIntegrationTests {
             assertEquals(
                 4,
                 jdbc.queryForObject(
-                    "select count(*) from comments c join comment_threads t on t.id = c.thread_id where t.artifact_id = ?",
+                    """
+                    select count(*) from comments c join comment_threads t on t.id = c.thread_id
+                    where t.artifact_id = ?
+                    """
+                        .trimIndent(),
                     Int::class.java,
                     id,
                 ),
@@ -785,7 +800,9 @@ class ArtifactMcpIntegrationTests {
             )
         }
     }
+}
 
+class ArtifactMetadataMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun customMetadataPreservesTypesSupportsSingleKeyUpdatesAndRemovalWithoutChangingArtifactVersions() {
         val token =
@@ -1075,7 +1092,11 @@ class ArtifactMcpIntegrationTests {
                         assertEquals(
                             "metadata-creator",
                             jdbc.queryForObject(
-                                "select u.subject from html_pages p join users u on u.id = p.created_by_user_id where p.id = ?",
+                                """
+                                select u.subject from html_pages p join users u on u.id = p.created_by_user_id
+                                where p.id = ?
+                                """
+                                    .trimIndent(),
                                 String::class.java,
                                 id,
                             ),
@@ -1083,7 +1104,11 @@ class ArtifactMcpIntegrationTests {
                         assertEquals(
                             "metadata-editor",
                             jdbc.queryForObject(
-                                "select u.subject from html_pages p join users u on u.id = p.updated_by_user_id where p.id = ?",
+                                """
+                                select u.subject from html_pages p join users u on u.id = p.updated_by_user_id
+                                where p.id = ?
+                                """
+                                    .trimIndent(),
                                 String::class.java,
                                 id,
                             ),
@@ -1095,15 +1120,4 @@ class ArtifactMcpIntegrationTests {
                     }
             }
     }
-
-    private fun contents(id: String) =
-        jdbc.queryForObject(
-            """
-            select v.html from html_page_versions v join html_pages p
-            on p.id = v.page_id and p.current_version = v.version where p.id = ?
-            """
-                .trimIndent(),
-            String::class.java,
-            id,
-        )
 }

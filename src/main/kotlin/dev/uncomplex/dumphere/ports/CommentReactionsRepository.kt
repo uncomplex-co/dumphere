@@ -23,7 +23,10 @@ interface CommentReactionsRepository : CrudRepository<CommentReactionEntity, Lon
 
     @Modifying
     @Query(
-        "insert into comment_reactions (comment_id, user_id, emoji) values (:commentId, :userId, :emoji) on conflict do nothing"
+        """
+        insert into comment_reactions (comment_id, user_id, emoji)
+        values (:commentId, :userId, :emoji) on conflict do nothing
+        """
     )
     fun add(commentId: Long, userId: Long, emoji: String): Int
 

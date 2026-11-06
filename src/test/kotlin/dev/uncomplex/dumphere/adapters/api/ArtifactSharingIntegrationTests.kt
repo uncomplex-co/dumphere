@@ -1183,7 +1183,13 @@ class ArtifactSharingIntegrationTests {
                             .with(csrf())
                             .contentType("application/json")
                             .content(
-                                """{"body":"Original","version":1,"xpath":"/html/body/p","relativeX":0.25,"relativeY":0.75}"""
+                                """
+                                {
+                                    "body": "Original", "version": 1, "xpath": "/html/body/p",
+                                    "relativeX": 0.25, "relativeY": 0.75
+                                }
+                                """
+                                    .trimIndent()
                             )
                     )
                     .andExpect(status().isCreated)
@@ -1569,7 +1575,13 @@ class ArtifactSharingIntegrationTests {
                             .with(csrf())
                             .contentType("application/json")
                             .content(
-                                """{"body":"Please review","version":1,"xpath":"/html/body/p","relativeX":0.3,"relativeY":0.7}"""
+                                """
+                                {
+                                    "body": "Please review", "version": 1, "xpath": "/html/body/p",
+                                    "relativeX": 0.3, "relativeY": 0.7
+                                }
+                                """
+                                    .trimIndent()
                             )
                     )
                     .andExpect(status().isCreated)

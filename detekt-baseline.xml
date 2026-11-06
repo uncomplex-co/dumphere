@@ -14,9 +14,9 @@
     <ID>FunctionParameterNaming:DiscussionMcpTools.kt:DiscussionMcpTools$@McpToolParam(description = "Discussion thread id", required = true) thread_id: Long</ID>
     <ID>FunctionParameterNaming:HtmlshareMcpTools.kt:HtmlshareMcpTools$@McpToolParam(description = "Short human-readable file name", required = false) file_name: String?</ID>
     <ID>LargeClass:ArtifactSharingIntegrationTests.kt:ArtifactSharingIntegrationTests</ID>
-    <ID>LongMethod:ArtifactMcpIntegrationTests.kt:ArtifactMcpIntegrationTests$@Test fun agentsDiscussArtifactsAcrossVersionsWithoutMixingThreadsOrChangingContent</ID>
+    <ID>LongMethod:ArtifactMcpIntegrationTests.kt:ArtifactDiscussionsMcpIntegrationTests$@Test fun agentsDiscussArtifactsAcrossVersionsWithoutMixingThreadsOrChangingContent</ID>
     <ID>LongMethod:ArtifactMcpIntegrationTests.kt:ArtifactMcpIntegrationTests$@Test fun agentsPublishInspectShareEditAndRevokeWithoutRenewingAccess</ID>
-    <ID>LongMethod:ArtifactMcpIntegrationTests.kt:ArtifactMcpIntegrationTests$@Test fun customMetadataPreservesTypesSupportsSingleKeyUpdatesAndRemovalWithoutChangingArtifactVersions</ID>
+    <ID>LongMethod:ArtifactMcpIntegrationTests.kt:ArtifactMetadataMcpIntegrationTests$@Test fun customMetadataPreservesTypesSupportsSingleKeyUpdatesAndRemovalWithoutChangingArtifactVersions</ID>
     <ID>LongMethod:ArtifactSharingIntegrationTests.kt:ArtifactSharingIntegrationTests$@Test fun `anonymous viewers can post document comments using the viewer CSRF token and read newest first`</ID>
     <ID>LongMethod:ArtifactSharingIntegrationTests.kt:ArtifactSharingIntegrationTests$@Test fun `attached threads retain XPath and relative coordinates across updates without changing artifact HTML`</ID>
     <ID>LongMethod:ArtifactSharingIntegrationTests.kt:ArtifactSharingIntegrationTests$@Test fun anyTeamMemberCanChangeVisibilityThroughCsrfProtectedBrowserEndpoint</ID>

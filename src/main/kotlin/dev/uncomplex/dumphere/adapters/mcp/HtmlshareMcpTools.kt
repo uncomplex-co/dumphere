@@ -27,7 +27,10 @@ class HtmlshareMcpTools(
     @McpTool(
         name = "get_artifact_metadata",
         description =
-            "Read an artifact's metadata, including customMetadata key-value pairs, effective visibility, and public access deadline without changing it",
+            """
+            Read an artifact's metadata, including customMetadata key-value pairs,
+            effective visibility, and public access deadline without changing it.
+            """,
     )
     fun getArtifactMetadata(
         @McpToolParam(description = "Published artifact id", required = true) id: String
@@ -36,7 +39,11 @@ class HtmlshareMcpTools(
     @McpTool(
         name = "set_artifact_metadata",
         description =
-            "Set one custom metadata key on an artifact, preserving JSON value types. Pass null to remove that key. Other keys and artifact content are unchanged; no content version is created. Returns artifact metadata including customMetadata.",
+            """
+            Set one custom metadata key on an artifact, preserving JSON value types.
+            Pass null to remove that key. Other keys and artifact content are unchanged;
+            no content version is created. Returns artifact metadata including customMetadata.
+            """,
     )
     fun setArtifactMetadata(
         @McpToolParam(description = "Published artifact id", required = true) id: String,
@@ -131,7 +138,10 @@ class HtmlshareMcpTools(
     @McpTool(
         name = "enable_live_reload",
         description =
-            "Enable or disable live-reload for a published page. When enabled, the page automatically refreshes after each edit.",
+            """
+            Enable or disable live-reload for a published page.
+            When enabled, the page automatically refreshes after each edit.
+            """,
     )
     fun enableLiveReload(
         @McpToolParam(description = "Published page id", required = true) id: String,

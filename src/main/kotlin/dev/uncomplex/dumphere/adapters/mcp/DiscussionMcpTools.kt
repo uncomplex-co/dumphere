@@ -118,7 +118,10 @@ class DiscussionMcpTools(
     @McpTool(
         name = "reopen_discussion_thread",
         description =
-            "Reopen a resolved discussion thread, preserving comments and its stable thread number. Already-open threads are unchanged.",
+            """
+            Reopen a resolved discussion thread, preserving comments and its stable thread number.
+            Already-open threads are unchanged.
+            """,
     )
     fun reopenDiscussionThread(
         @McpToolParam(description = "Published artifact id", required = true) id: String,
