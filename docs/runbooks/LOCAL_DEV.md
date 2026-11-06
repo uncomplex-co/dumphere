@@ -131,9 +131,9 @@ curl --fail-with-body -sS -u "$API_USER:$API_PASSWORD" \
   "$BASE_URL/api/pages/$PAGE_ID" | jq -e '.version == 1'
 
 curl --fail-with-body -sS -u "$API_USER:$API_PASSWORD" \
-  -X PUT -H 'Content-Type: application/json' \
-  -d '{"html":"<h1>Local version 2</h1>"}' \
-  "$BASE_URL/api/pages/$PAGE_ID" | jq -e '.version == 2'
+  -X POST -H 'Content-Type: text/html; charset=utf-8' \
+  --data-binary '<h1>Local version 2</h1>' \
+  "$BASE_URL/api/pages/$PAGE_ID/replace" | jq -e '.version == 2'
 
 curl --fail-with-body -sS -u "$API_USER:$API_PASSWORD" \
   "$BASE_URL/api/pages/$PAGE_ID" | jq -e '.version == 2'
@@ -141,6 +141,13 @@ curl --fail-with-body -sS -u "$API_USER:$API_PASSWORD" \
 curl --fail-with-body -sS -u "$API_USER:$API_PASSWORD" \
   "$BASE_URL/api/agent/pages/$PAGE_ID/contents" | grep -F 'Local version 2'
 ```
+
+`POST /api/pages/{id}/replace` takes the complete document as a raw UTF-8 body,
+not a JSON envelope, and returns JSON artifact metadata. It creates the next
+version at the same URL and preserves the artifact's existing HTML/Markdown
+format, regardless of the request's content type. Accepted content types are
+`text/html`, `text/markdown`, `text/plain`, and `application/octet-stream`.
+Use `--data-binary @report.html` (or `@report.md`) to upload a local file.
 
 Independently inspect committed PostgreSQL rows after publishing/updating:
 

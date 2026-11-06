@@ -224,9 +224,9 @@ class ArtifactSharingIntegrationTests {
         assertEquals(until, deadline(id))
         mvc
             .perform(
-                put(
-                    "/api/pages/$id",
-                ).with(httpBasic("htmlshare", "htmlshare")).contentType("application/json").content("""{"html":"<p>second</p>"}"""),
+                post(
+                    "/api/pages/$id/replace",
+                ).with(httpBasic("htmlshare", "htmlshare")).contentType("text/html; charset=utf-8").content("<p>second</p>"),
             ).andExpect(status().isOk)
         assertEquals(2, committedVersion(id))
         assertEquals("<p>second</p>", committedContents(id))
@@ -626,10 +626,10 @@ class ArtifactSharingIntegrationTests {
             ).andExpect(status().isCreated)
         mvc
             .perform(
-                put("/api/pages/$id")
+                post("/api/pages/$id/replace")
                     .with(httpBasic("htmlshare", "htmlshare"))
-                    .contentType("application/json")
-                    .content("""{"html":"<html><body><p>Element removed</p></body></html>"}"""),
+                    .contentType("text/html; charset=utf-8")
+                    .content("<html><body><p>Element removed</p></body></html>"),
             ).andExpect(status().isOk)
         val listed =
             json.readTree(
@@ -820,10 +820,10 @@ class ArtifactSharingIntegrationTests {
         val threadId = first.path("threadId").asLong()
         mvc
             .perform(
-                put("/api/pages/$id")
+                post("/api/pages/$id/replace")
                     .with(httpBasic("htmlshare", "htmlshare"))
-                    .contentType("application/json")
-                    .content("""{"html":"<h1>Updated</h1>"}"""),
+                    .contentType("text/html; charset=utf-8")
+                    .content("<h1>Updated</h1>"),
             ).andExpect(status().isOk)
 
         val reply =
@@ -1010,10 +1010,10 @@ class ArtifactSharingIntegrationTests {
         val id = publish("<h1>Original</h1>")
         mvc
             .perform(
-                put("/api/pages/$id")
+                post("/api/pages/$id/replace")
                     .with(httpBasic("htmlshare", "htmlshare"))
-                    .contentType("application/json")
-                    .content("""{"html":"<h1>Updated</h1>"}"""),
+                    .contentType("text/html; charset=utf-8")
+                    .content("<h1>Updated</h1>"),
             ).andExpect(status().isOk)
         val response =
             json.readTree(
