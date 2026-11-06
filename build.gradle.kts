@@ -1,10 +1,11 @@
 plugins {
     kotlin("jvm") version "2.3.21"
     kotlin("plugin.spring") version "2.3.21"
-    id("org.springframework.boot") version "4.1.1"
+    id("org.springframework.boot") version "4.1.2"
     id("io.spring.dependency-management") version "1.1.7"
     id("com.github.spotbugs") version "6.5.4"
     id("com.diffplug.spotless") version "8.5.1"
+    id("dev.detekt") version "2.0.0-alpha.6"
 }
 
 group = "dev.uncomplex.htmlshare"
@@ -65,6 +66,14 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.ai:spring-ai-bom:${property("springAiVersion")}")
+    }
+}
+
+configurations.named("detekt") {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlin") {
+            useVersion("2.4.10")
+        }
     }
 }
 
