@@ -43,5 +43,11 @@ out/
 application-prod.properties
 application-local_dev.properties
 
+# Local credentials. Templates must contain placeholders only.
+.env
+.env.*
+!.env.example
+!.env.sample
+
 # roborev snapshots
 /.roborev/

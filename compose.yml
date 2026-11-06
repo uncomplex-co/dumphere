@@ -13,7 +13,7 @@ services:
     environment:
       POSTGRES_DB: htmlshare
       POSTGRES_USER: htmlshare
-      POSTGRES_PASSWORD: htmlshare
+      POSTGRES_PASSWORD: htmlshare # betterleaks:allow -- Local development credential.
     ports:
       - "7332:5432"
     volumes:

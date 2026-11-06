@@ -1,5 +1,14 @@
 [tools]
 java = "temurin-25"
+"github:betterleaks/betterleaks" = "1.10.0"
 
 [tasks]
 start = "./gradlew bootRun --rerun-tasks --args='--spring.profiles.active=local_dev'"
+
+[tasks.secrets]
+description = "Scan tracked and non-ignored untracked files for secrets"
+run = "bash -o pipefail -c 'git ls-files --cached --others --exclude-standard -z | xargs -0 -r betterleaks dir --redact=100 --validation=false --verbose --timeout=120 --'"
+
+[tasks."hooks:install"]
+description = "Install the local secret-scanning pre-commit hook without replacing other hooks"
+run = "sh tools/install-hooks.sh"

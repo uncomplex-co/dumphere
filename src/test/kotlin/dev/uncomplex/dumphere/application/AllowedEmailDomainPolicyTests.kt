@@ -47,7 +47,7 @@ class AllowedEmailDomainPolicyTests {
                 maxHtmlBytes = 1024,
                 allowedEmailDomain = domain,
                 apiUsername = "htmlshare",
-                apiPassword = "htmlshare",
+                apiPassword = "htmlshare", // betterleaks:allow -- Dummy test credential.
             ),
         )
 

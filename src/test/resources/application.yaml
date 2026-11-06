@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:htmlshare;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  flyway:
+    enabled: false
+  session:
+    jdbc:
+      initialize-schema: never
+
+management:
+  tracing:
+    export:
+      enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
+
+htmlshare:
+  public-base-url: http://localhost:7331
+  max-html-bytes: 5242880
+  api-username: htmlshare
+  api-password: "htmlshare" # betterleaks:allow -- Dummy test credential.
+  # Leave blank to allow any email domain.
+  allowed-email-domain: ""

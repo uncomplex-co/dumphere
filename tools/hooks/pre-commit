@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+if ! command -v mise >/dev/null 2>&1; then
+    echo "Secret scan blocked: install mise and run mise install." >&2
+    exit 1
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+exec mise exec -- betterleaks git --staged --redact=100 --validation=false --verbose --timeout=120 .
