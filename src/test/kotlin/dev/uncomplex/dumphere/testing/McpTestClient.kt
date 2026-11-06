@@ -1,7 +1,5 @@
 package dev.uncomplex.dumphere.testing
 
-import tools.jackson.databind.JsonNode
-import tools.jackson.databind.ObjectMapper
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -10,6 +8,8 @@ import java.time.Duration
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.ObjectMapper
 
 class McpTestClient(
     private val port: Int,
@@ -33,7 +33,7 @@ class McpTestClient(
                             "capabilities" to emptyMap<String, Any>(),
                             "clientInfo" to mapOf("name" to "sharing-test", "version" to "1"),
                         ),
-                ),
+                )
             )
         assertEquals(200, response.statusCode(), response.body())
         assertFalse(payload(response).has("error"), response.body())
@@ -55,7 +55,7 @@ class McpTestClient(
                     "id" to ++requestId,
                     "method" to "tools/call",
                     "params" to mapOf("name" to name, "arguments" to arguments),
-                ),
+                )
             )
         assertEquals(200, response.statusCode(), response.body())
         val message = payload(response)
@@ -79,19 +79,12 @@ class McpTestClient(
     fun metadata(result: JsonNode): JsonNode {
         val structured = result.path("structuredContent")
         if (structured.has("id")) return structured
-        return json.readTree(
-            result
-                .path("content")
-                .first()
-                .path("text")
-                .asString(),
-        )
+        return json.readTree(result.path("content").first().path("text").asString())
     }
 
     private fun send(body: Map<String, Any>): HttpResponse<String> {
         val request =
-            HttpRequest
-                .newBuilder(URI("http://localhost:$port/mcp"))
+            HttpRequest.newBuilder(URI("http://localhost:$port/mcp"))
                 .timeout(Duration.ofSeconds(15))
                 .header("Authorization", "Bearer $token")
                 .header("Content-Type", "application/json")
@@ -106,12 +99,8 @@ class McpTestClient(
 
     private fun payload(response: HttpResponse<String>): JsonNode =
         json.readTree(
-            response
-                .body()
-                .lineSequence()
-                .firstOrNull { it.startsWith("data:") }
-                ?.removePrefix("data:")
-                ?.trim() ?: response.body(),
+            response.body().lineSequence().firstOrNull { it.startsWith("data:") }?.removePrefix("data:")?.trim()
+                ?: response.body()
         )
 
     override fun close() = http.close()

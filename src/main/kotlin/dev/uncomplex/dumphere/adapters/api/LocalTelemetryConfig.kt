@@ -17,8 +17,9 @@ import org.springframework.web.filter.OncePerRequestFilter
 @Profile("local_dev")
 class LocalTelemetryConfig {
     @Bean
-    fun telemetryLogAppender(openTelemetry: OpenTelemetry): InitializingBean =
-        InitializingBean { OpenTelemetryAppender.install(openTelemetry) }
+    fun telemetryLogAppender(openTelemetry: OpenTelemetry): InitializingBean = InitializingBean {
+        OpenTelemetryAppender.install(openTelemetry)
+    }
 
     @Bean
     fun authRequestLogging(): FilterRegistrationBean<OncePerRequestFilter> {
@@ -26,8 +27,10 @@ class LocalTelemetryConfig {
         val filter =
             object : OncePerRequestFilter() {
                 override fun shouldNotFilter(request: HttpServletRequest): Boolean =
-                    request.requestURI != "/favicon.ico" && request.requestURI != "/login" &&
-                        !request.requestURI.startsWith("/oauth2/") && !request.requestURI.startsWith("/login/")
+                    request.requestURI != "/favicon.ico" &&
+                        request.requestURI != "/login" &&
+                        !request.requestURI.startsWith("/oauth2/") &&
+                        !request.requestURI.startsWith("/login/")
 
                 override fun doFilterInternal(
                     request: HttpServletRequest,
@@ -37,7 +40,12 @@ class LocalTelemetryConfig {
                     try {
                         filterChain.doFilter(request, response)
                     } finally {
-                        logger.info("Auth HTTP request: method={} path={} status={}", request.method, request.requestURI, response.status)
+                        logger.info(
+                            "Auth HTTP request: method={} path={} status={}",
+                            request.method,
+                            request.requestURI,
+                            response.status,
+                        )
                     }
                 }
             }

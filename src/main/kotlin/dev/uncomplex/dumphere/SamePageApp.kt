@@ -5,9 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 
-@SpringBootApplication
-@EnableConfigurationProperties(SamePageAppProperties::class)
-class SamePageApp
+@SpringBootApplication @EnableConfigurationProperties(SamePageAppProperties::class) class SamePageApp
 
 fun main(args: Array<String>) {
     runApplication<SamePageApp>(*args)

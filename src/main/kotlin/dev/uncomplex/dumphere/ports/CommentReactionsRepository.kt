@@ -7,7 +7,8 @@ import org.springframework.data.jdbc.repository.query.Query
 import org.springframework.data.repository.CrudRepository
 
 interface CommentReactionsRepository : CrudRepository<CommentReactionEntity, Long> {
-    @Query("""
+    @Query(
+        """
         select r.comment_id, r.emoji, coalesce(u.display_name, 'Team member') as name,
                coalesce(u.subject = :subject, false) as mine
         from comment_reactions r
@@ -16,11 +17,14 @@ interface CommentReactionsRepository : CrudRepository<CommentReactionEntity, Lon
         join comment_threads t on t.id = c.thread_id
         where t.artifact_id = :artifactId and t.deleted_at is null and c.deleted_at is null
         order by r.created_at, r.id
-    """)
+    """
+    )
     fun findArtifactVoters(artifactId: String, subject: String?): List<CommentReactionVoter>
 
     @Modifying
-    @Query("insert into comment_reactions (comment_id, user_id, emoji) values (:commentId, :userId, :emoji) on conflict do nothing")
+    @Query(
+        "insert into comment_reactions (comment_id, user_id, emoji) values (:commentId, :userId, :emoji) on conflict do nothing"
+    )
     fun add(commentId: Long, userId: Long, emoji: String): Int
 
     @Modifying

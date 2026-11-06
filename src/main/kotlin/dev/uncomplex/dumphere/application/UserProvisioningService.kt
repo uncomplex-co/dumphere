@@ -1,15 +1,13 @@
 package dev.uncomplex.dumphere.application
 
 import dev.uncomplex.dumphere.ports.UserRepository
+import java.time.Instant
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 
 @Service
-class UserProvisioningService(
-    private val users: UserRepository,
-) {
+class UserProvisioningService(private val users: UserRepository) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Transactional

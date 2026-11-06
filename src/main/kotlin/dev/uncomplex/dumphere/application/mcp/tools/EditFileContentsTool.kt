@@ -5,9 +5,7 @@ import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import org.springframework.stereotype.Service
 
 @Service
-class EditFileContentsTool(
-    private val store: PublishedArtifactsStore,
-) {
+class EditFileContentsTool(private val store: PublishedArtifactsStore) {
     fun execute(
         id: String,
         oldString: String,

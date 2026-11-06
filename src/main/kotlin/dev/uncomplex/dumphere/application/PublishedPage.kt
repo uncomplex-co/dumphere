@@ -14,8 +14,7 @@ data class PublishedPage(
     val updatedBy: ArtifactAuthor? = null,
     val version: Int = 1,
     val bytes: Long,
-    @get:JsonProperty("live")
-    val isLive: Boolean = false,
+    @get:JsonProperty("live") val isLive: Boolean = false,
     val visibility: ArtifactSharing = ArtifactSharing(),
     val customMetadata: Map<String, Any> = emptyMap(),
 )
@@ -24,5 +23,6 @@ data class ArtifactAuthor(val email: String?, val name: String?)
 
 data class ArtifactSharing(val publicUntil: Instant? = null) {
     val visibility: ArtifactVisibility
-        get() = if (publicUntil?.isAfter(Instant.now()) == true) ArtifactVisibility.PUBLIC else ArtifactVisibility.INTERNAL
+        get() =
+            if (publicUntil?.isAfter(Instant.now()) == true) ArtifactVisibility.PUBLIC else ArtifactVisibility.INTERNAL
 }

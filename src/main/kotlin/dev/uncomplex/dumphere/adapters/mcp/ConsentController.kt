@@ -3,6 +3,7 @@ package dev.uncomplex.dumphere.adapters.mcp
 import dev.uncomplex.dumphere.application.authenticatedUser
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import kotlin.text.iterator
 import org.springframework.http.MediaType
 import org.springframework.security.core.Authentication
 import org.springframework.security.web.csrf.CsrfToken
@@ -11,12 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
-import kotlin.text.iterator
 
 @Controller
-class ConsentController(
-    private val mcpOAuthService: McpOAuthService,
-) {
+class ConsentController(private val mcpOAuthService: McpOAuthService) {
     @GetMapping("/oauth2/consent", produces = [MediaType.TEXT_HTML_VALUE])
     @ResponseBody
     fun consent(
@@ -24,7 +22,8 @@ class ConsentController(
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): String {
-        val authorizationRequest = request.session.getAttribute(McpAuthorizationRequest.sessionKey(state)) as? McpAuthorizationRequest
+        val authorizationRequest =
+            request.session.getAttribute(McpAuthorizationRequest.sessionKey(state)) as? McpAuthorizationRequest
         if (authorizationRequest == null) {
             response.status = HttpServletResponse.SC_BAD_REQUEST
             return "Missing pending MCP authorization request."
@@ -68,7 +67,8 @@ class ConsentController(
                           </main>
                         </body>
                         </html>
-            """.trimIndent()
+            """
+            .trimIndent()
     }
 
     @PostMapping("/oauth2/consent")
@@ -80,7 +80,8 @@ class ConsentController(
         response: HttpServletResponse,
     ) {
         val session = request.session
-        val authorizationRequest = session.getAttribute(McpAuthorizationRequest.sessionKey(state)) as? McpAuthorizationRequest
+        val authorizationRequest =
+            session.getAttribute(McpAuthorizationRequest.sessionKey(state)) as? McpAuthorizationRequest
         session.removeAttribute(McpAuthorizationRequest.sessionKey(state))
 
         if (authorizationRequest == null) {
@@ -114,7 +115,7 @@ class ConsentController(
                         '"' -> "&quot;"
                         '\'' -> "&#39;"
                         else -> char
-                    },
+                    }
                 )
             }
         }

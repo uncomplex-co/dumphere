@@ -1,13 +1,13 @@
 package dev.uncomplex.dumphere.application
 
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.springframework.security.authentication.TestingAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.core.oidc.OidcIdToken
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser
 import org.springframework.security.oauth2.jwt.Jwt
-import kotlin.test.Test
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class AllowedEmailDomainPolicyTests {
     @Test
@@ -48,7 +48,7 @@ class AllowedEmailDomainPolicyTests {
                 allowedEmailDomain = domain,
                 apiUsername = "htmlshare",
                 apiPassword = "htmlshare", // betterleaks:allow -- Dummy test credential.
-            ),
+            )
         )
 
     private fun authentication(principal: Any) =
@@ -57,13 +57,13 @@ class AllowedEmailDomainPolicyTests {
         }
 
     private fun jwtPrincipal(email: String?) =
-        Jwt
-            .withTokenValue("token")
+        Jwt.withTokenValue("token")
             .header("alg", "none")
             .claim("sub", "user-123")
             .apply {
                 if (email != null) claim("email", email)
-            }.build()
+            }
+            .build()
 
     private fun oidcPrincipal(email: String): DefaultOidcUser {
         val idToken =

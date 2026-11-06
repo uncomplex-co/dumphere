@@ -3,15 +3,6 @@ package dev.uncomplex.dumphere.adapters.api
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.test.context.DynamicPropertyRegistry
-import org.springframework.test.context.DynamicPropertySource
-import tools.jackson.databind.ObjectMapper
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -21,21 +12,34 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
+import tools.jackson.databind.ObjectMapper
 
 /** Real HTTP, security filters and PostgreSQL. No mocked application boundaries or rollback transaction. */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = [
-        "spring.security.oauth2.client.registration.google.client-id=test-client",
-        "spring.security.oauth2.client.registration.google.client-secret=test-secret",
-        "htmlshare.api-username=replacement-client",
-        "htmlshare.api-password=replacement-password",
-    ],
+    properties =
+        [
+            "spring.security.oauth2.client.registration.google.client-id=test-client",
+            "spring.security.oauth2.client.registration.google.client-secret=test-secret",
+            "htmlshare.api-username=replacement-client",
+            "htmlshare.api-password=replacement-password",
+        ],
 )
 class ArtifactReplacementIntegrationTests {
     @LocalServerPort private var port: Int = 0
+
     @Autowired private lateinit var pages: PublishedArtifactsStore
+
     @Autowired private lateinit var jdbc: JdbcTemplate
+
     @Autowired private lateinit var json: ObjectMapper
 
     companion object {
@@ -71,12 +75,37 @@ class ArtifactReplacementIntegrationTests {
         assertEquals(2, metadata.path("version").asInt())
         assertEquals(24, metadata.path("bytes").asInt())
         assertFalse(metadata.has("content"))
-        assertNotNull(jdbc.queryForObject("select updated_by_user_id from html_pages where id = ?", Long::class.java, original.id))
-        assertEquals(2, jdbc.queryForObject("select current_version from html_pages where id = ?", Int::class.java, original.id))
-        assertEquals(format.name, jdbc.queryForObject("select content_format from html_pages where id = ?", String::class.java, original.id))
-        assertEquals(listOf("Original document", "Complete replacement ✓"), jdbc.queryForList(
-            "select html from html_page_versions where page_id = ? order by version", String::class.java, original.id,
-        ))
+        assertNotNull(
+            jdbc.queryForObject(
+                "select updated_by_user_id from html_pages where id = ?",
+                Long::class.java,
+                original.id,
+            )
+        )
+        assertEquals(
+            2,
+            jdbc.queryForObject(
+                "select current_version from html_pages where id = ?",
+                Int::class.java,
+                original.id,
+            ),
+        )
+        assertEquals(
+            format.name,
+            jdbc.queryForObject(
+                "select content_format from html_pages where id = ?",
+                String::class.java,
+                original.id,
+            ),
+        )
+        assertEquals(
+            listOf("Original document", "Complete replacement ✓"),
+            jdbc.queryForList(
+                "select html from html_page_versions where page_id = ? order by version",
+                String::class.java,
+                original.id,
+            ),
+        )
     }
 
     @Test
@@ -86,44 +115,102 @@ class ArtifactReplacementIntegrationTests {
         val response = send("POST", "/api/pages/$id/replace", "Replacement")
 
         assertEquals(404, response.statusCode(), response.body())
-        assertEquals(0, jdbc.queryForObject("select count(*) from html_pages where id = ?", Int::class.java, id))
-        assertEquals(0, jdbc.queryForObject("select count(*) from html_page_versions where page_id = ?", Int::class.java, id))
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from html_pages where id = ?",
+                Int::class.java,
+                id,
+            ),
+        )
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from html_page_versions where page_id = ?",
+                Int::class.java,
+                id,
+            ),
+        )
     }
 
     @Test
     fun `a JSON envelope is rejected without changing content`() {
         val original = pages.publish("Original", "Original document", PageContentFormat.HTML, null)
 
-        val response = send("POST", "/api/pages/${original.id}/replace", """{"content":"Replacement"}""", "application/json")
+        val response =
+            send(
+                "POST",
+                "/api/pages/${original.id}/replace",
+                """{"content":"Replacement"}""",
+                "application/json",
+            )
 
         assertEquals(415, response.statusCode(), response.body())
-        assertEquals(1, jdbc.queryForObject("select current_version from html_pages where id = ?", Int::class.java, original.id))
-        assertEquals(listOf("Original document"), jdbc.queryForList(
-            "select html from html_page_versions where page_id = ? order by version", String::class.java, original.id,
-        ))
+        assertEquals(
+            1,
+            jdbc.queryForObject(
+                "select current_version from html_pages where id = ?",
+                Int::class.java,
+                original.id,
+            ),
+        )
+        assertEquals(
+            listOf("Original document"),
+            jdbc.queryForList(
+                "select html from html_page_versions where page_id = ? order by version",
+                String::class.java,
+                original.id,
+            ),
+        )
     }
 
     @Test
     fun `the old PUT route is unavailable and does not replace content`() {
         val original = pages.publish("Original", "Original document", PageContentFormat.HTML, null)
 
-        val response = send("PUT", "/api/pages/${original.id}", """{"html":"Replacement"}""", "application/json")
+        val response =
+            send(
+                "PUT",
+                "/api/pages/${original.id}",
+                """{"html":"Replacement"}""",
+                "application/json",
+            )
 
         assertEquals(405, response.statusCode(), response.body())
-        assertEquals(1, jdbc.queryForObject("select current_version from html_pages where id = ?", Int::class.java, original.id))
-        assertEquals(listOf("Original document"), jdbc.queryForList(
-            "select html from html_page_versions where page_id = ? order by version", String::class.java, original.id,
-        ))
+        assertEquals(
+            1,
+            jdbc.queryForObject(
+                "select current_version from html_pages where id = ?",
+                Int::class.java,
+                original.id,
+            ),
+        )
+        assertEquals(
+            listOf("Original document"),
+            jdbc.queryForList(
+                "select html from html_page_versions where page_id = ? order by version",
+                String::class.java,
+                original.id,
+            ),
+        )
     }
 
-    private fun send(method: String, path: String, body: String, mediaType: String = "text/plain; charset=utf-8"): HttpResponse<String> {
+    private fun send(
+        method: String,
+        path: String,
+        body: String,
+        mediaType: String = "text/plain; charset=utf-8",
+    ): HttpResponse<String> {
         val credentials = Base64.getEncoder().encodeToString("replacement-client:replacement-password".toByteArray())
-        val request = HttpRequest.newBuilder(URI.create("http://localhost:$port$path"))
-            .header("Authorization", "Basic $credentials")
-            .header("Content-Type", mediaType)
-            .header("Accept", "application/json")
-            .method(method, HttpRequest.BodyPublishers.ofString(body))
-            .build()
-        return HttpClient.newHttpClient().use { it.send(request, HttpResponse.BodyHandlers.ofString()) }
+        val request =
+            HttpRequest.newBuilder(URI.create("http://localhost:$port$path"))
+                .header("Authorization", "Basic $credentials")
+                .header("Content-Type", mediaType)
+                .header("Accept", "application/json")
+                .method(method, HttpRequest.BodyPublishers.ofString(body))
+                .build()
+        return HttpClient.newHttpClient().use {
+            it.send(request, HttpResponse.BodyHandlers.ofString())
+        }
     }
 }

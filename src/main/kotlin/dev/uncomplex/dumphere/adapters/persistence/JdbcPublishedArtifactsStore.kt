@@ -12,18 +12,18 @@ import dev.uncomplex.dumphere.application.SamePageAppProperties
 import dev.uncomplex.dumphere.application.UserEntity
 import dev.uncomplex.dumphere.ports.HtmlPageRepository
 import dev.uncomplex.dumphere.ports.HtmlPageVersionRepository
-import dev.uncomplex.dumphere.ports.UserRepository
 import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
-import org.springframework.stereotype.Repository
-import org.springframework.transaction.annotation.Transactional
-import tools.jackson.core.type.TypeReference
-import tools.jackson.databind.ObjectMapper
+import dev.uncomplex.dumphere.ports.UserRepository
 import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Base64
+import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
+import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.ObjectMapper
 
 @Repository
 class JdbcPublishedArtifactsStore(
@@ -162,7 +162,8 @@ class JdbcPublishedArtifactsStore(
         val publicUntil =
             when (visibility) {
                 ArtifactVisibility.INTERNAL -> null
-                ArtifactVisibility.PUBLIC -> existing.publicUntil?.takeIf { it.isAfter(now) } ?: now.plus(Duration.ofDays(30))
+                ArtifactVisibility.PUBLIC ->
+                    existing.publicUntil?.takeIf { it.isAfter(now) } ?: now.plus(Duration.ofDays(30))
             }
         if (publicUntil == existing.publicUntil) return existing.toPublishedPage()
 
@@ -192,38 +193,43 @@ class JdbcPublishedArtifactsStore(
     }
 
     private fun readCustomMetadata(id: String): Map<String, Any> =
-        objectMapper.readValue(requireNotNull(pages.readCustomMetadata(id)), object : TypeReference<Map<String, Any>>() {})
+        objectMapper.readValue(
+            requireNotNull(pages.readCustomMetadata(id)),
+            object : TypeReference<Map<String, Any>>() {},
+        )
 
     private fun PublishedPage.toEntity(
         createdByUserId: Long? = null,
         updatedByUserId: Long? = null,
-    ) = HtmlPageEntity(
-        id = id,
-        title = title,
-        url = url,
-        contentFormat = contentFormat,
-        createdAt = createdAt,
-        createdByUserId = createdByUserId,
-        updatedAt = updatedAt,
-        updatedByUserId = updatedByUserId,
-        currentVersion = version,
-        currentBytes = bytes,
-        isLive = isLive,
-        publicUntil = visibility.publicUntil,
-    )
+    ) =
+        HtmlPageEntity(
+            id = id,
+            title = title,
+            url = url,
+            contentFormat = contentFormat,
+            createdAt = createdAt,
+            createdByUserId = createdByUserId,
+            updatedAt = updatedAt,
+            updatedByUserId = updatedByUserId,
+            currentVersion = version,
+            currentBytes = bytes,
+            isLive = isLive,
+            publicUntil = visibility.publicUntil,
+        )
 
     private fun PublishedPage.toVersionEntity(
         contents: String,
         recordedAt: Instant,
         createdByUserId: Long?,
-    ) = HtmlPageVersionEntity(
-        pageId = id,
-        version = version,
-        html = contents,
-        bytes = bytes,
-        createdAt = recordedAt,
-        createdByUserId = createdByUserId,
-    )
+    ) =
+        HtmlPageVersionEntity(
+            pageId = id,
+            version = version,
+            html = contents,
+            bytes = bytes,
+            createdAt = recordedAt,
+            createdByUserId = createdByUserId,
+        )
 
     private fun HtmlPageEntity.toPublishedPage() =
         PublishedPage(
@@ -242,10 +248,9 @@ class JdbcPublishedArtifactsStore(
             customMetadata = readCustomMetadata(id),
         )
 
-    private fun author(userId: Long?): ArtifactAuthor? =
-        userId?.let { id ->
-            users.findById(id).orElse(null)?.let { ArtifactAuthor(it.email, it.displayName) }
-        }
+    private fun author(userId: Long?): ArtifactAuthor? = userId?.let { id ->
+        users.findById(id).orElse(null)?.let { ArtifactAuthor(it.email, it.displayName) }
+    }
 
     private fun newId(): String {
         val bytes = ByteArray(18)

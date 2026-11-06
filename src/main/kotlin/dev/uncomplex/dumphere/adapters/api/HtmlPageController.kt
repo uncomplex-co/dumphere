@@ -1,12 +1,13 @@
 package dev.uncomplex.dumphere.adapters.api
 
-import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
+import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PageContentRenderer
 import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.SamePageAppProperties
-import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import jakarta.servlet.http.HttpServletRequest
+import java.nio.charset.StandardCharsets.UTF_8
 import org.springframework.http.CacheControl
 import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
@@ -21,7 +22,6 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
-import java.nio.charset.StandardCharsets.UTF_8
 
 @RestController
 class HtmlPageController(
@@ -34,42 +34,45 @@ class HtmlPageController(
 ) {
     private val viewerSecurityPolicy =
         listOf(
-            "default-src 'none'",
-            "script-src 'self'",
-            "style-src 'self' 'sha256-I3QIFHoQipvvv7VFJz5JKfJGG0vZdYBUqM1UqySC14g='",
-            "img-src 'self' https:",
-            "frame-src 'self'",
-            "connect-src 'self'",
-            "base-uri 'none'",
-            "form-action 'none'",
-            "frame-ancestors 'self'",
-        ).joinToString("; ")
+                "default-src 'none'",
+                "script-src 'self'",
+                "style-src 'self' 'sha256-I3QIFHoQipvvv7VFJz5JKfJGG0vZdYBUqM1UqySC14g='",
+                "img-src 'self' https:",
+                "frame-src 'self'",
+                "connect-src 'self'",
+                "base-uri 'none'",
+                "form-action 'none'",
+                "frame-ancestors 'self'",
+            )
+            .joinToString("; ")
 
     private val contentSecurityPolicy =
         listOf(
-            "sandbox allow-scripts allow-same-origin",
-            "default-src 'none'",
-            "img-src data: https:",
-            "style-src ${properties.cspStyleSrc}",
-            "script-src ${properties.cspScriptSrc}",
-            "font-src ${properties.cspFontSrc}",
-            "connect-src 'none'",
-            "base-uri 'none'",
-            "form-action 'none'",
-            "frame-ancestors 'self'",
-        ).joinToString("; ")
+                "sandbox allow-scripts allow-same-origin",
+                "default-src 'none'",
+                "img-src data: https:",
+                "style-src ${properties.cspStyleSrc}",
+                "script-src ${properties.cspScriptSrc}",
+                "font-src ${properties.cspFontSrc}",
+                "connect-src 'none'",
+                "base-uri 'none'",
+                "form-action 'none'",
+                "frame-ancestors 'self'",
+            )
+            .joinToString("; ")
 
     private val wrapperSecurityPolicy =
         listOf(
-            "default-src 'none'",
-            "script-src 'self'",
-            "style-src 'self'",
-            "frame-src 'self'",
-            "connect-src 'none'",
-            "base-uri 'none'",
-            "form-action 'none'",
-            "frame-ancestors 'self'",
-        ).joinToString("; ")
+                "default-src 'none'",
+                "script-src 'self'",
+                "style-src 'self'",
+                "frame-src 'self'",
+                "connect-src 'none'",
+                "base-uri 'none'",
+                "form-action 'none'",
+                "frame-ancestors 'self'",
+            )
+            .joinToString("; ")
 
     @GetMapping("/p/{id}", produces = [MediaType.TEXT_HTML_VALUE])
     fun show(
@@ -80,9 +83,9 @@ class HtmlPageController(
         val page = store.readMetadata(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         val canView = access.canView(page, authentication)
         val canManage = access.isMember(authentication)
-        val csrf = if (canView) (request.getAttribute(CsrfToken::class.java.name) as? CsrfToken)?.token.orEmpty() else ""
-        return ResponseEntity
-            .status(if (canView) HttpStatus.OK else HttpStatus.FORBIDDEN)
+        val csrf =
+            if (canView) (request.getAttribute(CsrfToken::class.java.name) as? CsrfToken)?.token.orEmpty() else ""
+        return ResponseEntity.status(if (canView) HttpStatus.OK else HttpStatus.FORBIDDEN)
             .cacheControl(CacheControl.noStore())
             .header("Content-Security-Policy", viewerSecurityPolicy)
             .header("Referrer-Policy", "no-referrer")
@@ -95,8 +98,7 @@ class HtmlPageController(
         authentication: Authentication?,
     ): ResponseEntity<String> {
         val page = readable(id, authentication)
-        return ResponseEntity
-            .ok()
+        return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
             .header("Content-Security-Policy", wrapperSecurityPolicy)
             .header("Referrer-Policy", "no-referrer")
@@ -110,8 +112,7 @@ class HtmlPageController(
     ): ResponseEntity<String> {
         val page = readable(id, authentication)
         val contents = store.readContents(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
-        return ResponseEntity
-            .ok()
+        return ResponseEntity.ok()
             .contentType(MediaType.TEXT_HTML)
             .cacheControl(CacheControl.noStore())
             .header("Content-Security-Policy", contentSecurityPolicy)
@@ -136,18 +137,16 @@ class HtmlPageController(
                 .trim()
                 .take(120)
                 .ifBlank { "artifact" } + extension
-        return ResponseEntity
-            .ok()
-            .contentType(MediaType("text", if (page.contentFormat == PageContentFormat.MARKDOWN) "markdown" else "html", UTF_8))
+        return ResponseEntity.ok()
+            .contentType(
+                MediaType("text", if (page.contentFormat == PageContentFormat.MARKDOWN) "markdown" else "html", UTF_8)
+            )
             .cacheControl(CacheControl.noStore())
             .header(
                 HttpHeaders.CONTENT_DISPOSITION,
-                ContentDisposition
-                    .attachment()
-                    .filename(name, UTF_8)
-                    .build()
-                    .toString(),
-            ).header("Content-Security-Policy", "sandbox; default-src 'none'")
+                ContentDisposition.attachment().filename(name, UTF_8).build().toString(),
+            )
+            .header("Content-Security-Policy", "sandbox; default-src 'none'")
             .body(contents.toByteArray(UTF_8))
     }
 
@@ -157,7 +156,9 @@ class HtmlPageController(
         authentication: Authentication?,
     ): ResponseEntity<ViewerStatus> {
         val page = readable(id, authentication)
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ViewerStatus(page, access.isMember(authentication)))
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .body(ViewerStatus(page, access.isMember(authentication)))
     }
 
     @PostMapping("/p/{id}/visibility")

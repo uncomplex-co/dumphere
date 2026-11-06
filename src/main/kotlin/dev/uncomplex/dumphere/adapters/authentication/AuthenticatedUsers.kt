@@ -25,8 +25,13 @@ class AuthenticatedUsers(
     @EventListener
     fun authenticated(event: AuthenticationSuccessEvent) {
         val authentication = event.authentication
-        if (authentication !is UsernamePasswordAuthenticationToken && authentication !is OAuth2AuthenticationToken &&
-            authentication !is OAuth2LoginAuthenticationToken && authentication !is JwtAuthenticationToken) return
+        if (
+            authentication !is UsernamePasswordAuthenticationToken &&
+                authentication !is OAuth2AuthenticationToken &&
+                authentication !is OAuth2LoginAuthenticationToken &&
+                authentication !is JwtAuthenticationToken
+        )
+            return
         val identity = authentication.authenticatedUser() ?: return
         // Configured Basic API credentials are not subject to the browser/MCP email-domain restriction.
         if (authentication is UsernamePasswordAuthenticationToken || domains.isAllowed(identity)) {
@@ -35,7 +40,8 @@ class AuthenticatedUsers(
     }
 
     fun resolve(authentication: Authentication?): UserEntity? {
-        if (authentication == null || !authentication.isAuthenticated || authentication is AnonymousAuthenticationToken) return null
+        if (authentication == null || !authentication.isAuthenticated || authentication is AnonymousAuthenticationToken)
+            return null
         val identity = authentication.authenticatedUser() ?: return null
         return users.findBySubject(identity.subject)
             ?: throw BadCredentialsException("Authenticated user has not been provisioned")

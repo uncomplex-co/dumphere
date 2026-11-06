@@ -66,9 +66,7 @@ object ArtifactViewerIds {
 }
 
 @Component
-class ArtifactViewer(
-    private val templates: ITemplateEngine,
-) {
+class ArtifactViewer(private val templates: ITemplateEngine) {
     fun render(
         page: PublishedPage?,
         authentication: Authentication?,
@@ -84,12 +82,7 @@ class ArtifactViewer(
                 else -> null
             }?.takeIf { it.startsWith("https://") }
         val initials =
-            name
-                .split(Regex("\\s+"))
-                .filter { it.isNotBlank() }
-                .take(2)
-                .joinToString("") { it.take(1) }
-                .uppercase()
+            name.split(Regex("\\s+")).filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1) }.uppercase()
         val values =
             mapOf(
                 "TITLE" to (page?.title ?: "Internal Artifact"),
@@ -173,7 +166,7 @@ class ArtifactViewer(
                         "CONTENT_URL" to "/p/${page.id}/content",
                         "DOCUMENT_FRAME_ID" to ArtifactViewerIds.DOCUMENT_FRAME,
                         "THREAD_PIN_ID" to ArtifactViewerIds.THREAD_PIN,
-                    ),
+                    )
                 )
             }
         return templates.process("artifact-wrapper", context)

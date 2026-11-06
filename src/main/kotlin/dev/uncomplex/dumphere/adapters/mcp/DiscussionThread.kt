@@ -18,19 +18,20 @@ data class DiscussionThread(
     val reactions: List<DiscussionReaction>,
 ) {
     companion object {
-        fun from(thread: ArtifactCommentThread) = DiscussionThread(
-            threadId = thread.threadId,
-            threadNumber = thread.threadNumber,
-            firstComment = thread.firstComment,
-            author = thread.author,
-            createdAt = thread.createdAt,
-            lastActivityAt = thread.lastActivityAt,
-            replyCount = thread.replyCount,
-            xpath = thread.xpath,
-            relativeX = thread.relativeX,
-            relativeY = thread.relativeY,
-            resolvedAt = thread.resolvedAt,
-            reactions = DiscussionReaction.from(thread.reactions),
-        )
+        fun from(thread: ArtifactCommentThread) =
+            DiscussionThread(
+                threadId = thread.threadId,
+                threadNumber = thread.threadNumber,
+                firstComment = thread.firstComment,
+                author = thread.author,
+                createdAt = thread.createdAt,
+                lastActivityAt = thread.lastActivityAt,
+                replyCount = thread.replyCount,
+                xpath = thread.xpath,
+                relativeX = thread.relativeX,
+                relativeY = thread.relativeY,
+                resolvedAt = thread.resolvedAt,
+                reactions = DiscussionReaction.from(thread.reactions),
+            )
     }
 }

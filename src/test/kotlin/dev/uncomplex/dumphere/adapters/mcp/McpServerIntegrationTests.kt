@@ -1,16 +1,6 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.security.oauth2.jwt.JwtClaimsSet
-import org.springframework.security.oauth2.jwt.JwtEncoder
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters
-import org.springframework.test.context.DynamicPropertyRegistry
-import org.springframework.test.context.DynamicPropertySource
-import tools.jackson.databind.JsonNode
-import tools.jackson.databind.ObjectMapper
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -21,15 +11,26 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.security.oauth2.jwt.JwtClaimsSet
+import org.springframework.security.oauth2.jwt.JwtEncoder
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.ObjectMapper
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = [
-        "spring.security.oauth2.client.registration.google.client-id=test-client-id",
-        "spring.security.oauth2.client.registration.google.client-secret=test-client-secret",
-        "spring.ai.mcp.server.name=htmlshare",
-        "spring.ai.mcp.server.protocol=STREAMABLE",
-    ],
+    properties =
+        [
+            "spring.security.oauth2.client.registration.google.client-id=test-client-id",
+            "spring.security.oauth2.client.registration.google.client-secret=test-client-secret",
+            "spring.ai.mcp.server.name=htmlshare",
+            "spring.ai.mcp.server.protocol=STREAMABLE",
+        ],
 )
 class McpServerIntegrationTests {
     companion object {
@@ -38,30 +39,22 @@ class McpServerIntegrationTests {
         fun database(registry: DynamicPropertyRegistry) = PostgresTestDatabase.configure(registry)
     }
 
-    @LocalServerPort
-    private var port: Int = 0
+    @LocalServerPort private var port: Int = 0
 
-    @Autowired
-    private lateinit var jwtEncoder: JwtEncoder
+    @Autowired private lateinit var jwtEncoder: JwtEncoder
 
-    @Autowired
-    private lateinit var mapper: ObjectMapper
+    @Autowired private lateinit var mapper: ObjectMapper
 
     @Test
     fun publicJwksNeverIncludesPrivateKeyMaterial() {
         val response =
-            HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:$port/oauth2/jwks")).GET().build(),
-                HttpResponse.BodyHandlers.ofString(),
-            )
+            HttpClient.newHttpClient()
+                .send(
+                    HttpRequest.newBuilder(URI.create("http://localhost:$port/oauth2/jwks")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString(),
+                )
         assertEquals(200, response.statusCode())
-        val keys =
-            mapper
-                .readTree(response.body())
-                .required("keys")
-                .asArray()
-                .values()
-                .toList()
+        val keys = mapper.readTree(response.body()).required("keys").asArray().values().toList()
         assertEquals(1, keys.size)
         for (key in keys) {
             assertEquals("RSA", key.path("kty").asString())
@@ -80,14 +73,14 @@ class McpServerIntegrationTests {
             jwtEncoder
                 .encode(
                     JwtEncoderParameters.from(
-                        JwtClaimsSet
-                            .builder()
+                        JwtClaimsSet.builder()
                             .subject("mcp-test-user")
                             .issuedAt(Instant.now())
                             .expiresAt(Instant.now().plusSeconds(60))
-                            .build(),
-                    ),
-                ).tokenValue
+                            .build()
+                    )
+                )
+                .tokenValue
         val client = HttpClient.newHttpClient()
         val initialized =
             post(
@@ -108,11 +101,7 @@ class McpServerIntegrationTests {
         assertEquals(200, initialized.statusCode(), initialized.body())
         assertEquals(
             "htmlshare",
-            payload(initialized)
-                .path("result")
-                .path("serverInfo")
-                .path("name")
-                .asString(),
+            payload(initialized).path("result").path("serverInfo").path("name").asString(),
         )
         val session = initialized.headers().firstValue("Mcp-Session-Id").orElse(null)
         val notification =
@@ -124,7 +113,13 @@ class McpServerIntegrationTests {
             )
         assertTrue(notification.statusCode() in 200..299, notification.body())
 
-        val listed = post(client, token, mapOf("jsonrpc" to "2.0", "id" to 2, "method" to "tools/list"), session)
+        val listed =
+            post(
+                client,
+                token,
+                mapOf("jsonrpc" to "2.0", "id" to 2, "method" to "tools/list"),
+                session,
+            )
         assertEquals(200, listed.statusCode(), listed.body())
         val names =
             payload(listed)
@@ -164,7 +159,11 @@ class McpServerIntegrationTests {
                     "jsonrpc" to "2.0",
                     "id" to 3,
                     "method" to "tools/call",
-                    "params" to mapOf("name" to "read_file_contents", "arguments" to mapOf("id" to "invalid!")),
+                    "params" to
+                        mapOf(
+                            "name" to "read_file_contents",
+                            "arguments" to mapOf("id" to "invalid!"),
+                        ),
                 ),
                 session,
             )
@@ -180,8 +179,7 @@ class McpServerIntegrationTests {
         session: String? = null,
     ): HttpResponse<String> {
         val builder =
-            HttpRequest
-                .newBuilder(URI("http://localhost:$port/mcp"))
+            HttpRequest.newBuilder(URI("http://localhost:$port/mcp"))
                 .timeout(Duration.ofSeconds(15))
                 .header("Authorization", "Bearer $token")
                 .header("Content-Type", "application/json")
@@ -197,11 +195,7 @@ class McpServerIntegrationTests {
 
     private fun payload(response: HttpResponse<String>): JsonNode =
         mapper.readTree(
-            response
-                .body()
-                .lineSequence()
-                .firstOrNull { it.startsWith("data:") }
-                ?.removePrefix("data:")
-                ?.trim() ?: response.body(),
+            response.body().lineSequence().firstOrNull { it.startsWith("data:") }?.removePrefix("data:")?.trim()
+                ?: response.body()
         )
 }

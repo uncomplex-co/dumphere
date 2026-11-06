@@ -1,14 +1,14 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
-import dev.uncomplex.dumphere.application.ArtifactVisibility
-import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
-import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
+import dev.uncomplex.dumphere.application.ArtifactVisibility
+import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.mcp.tools.EditFileContentsTool
 import dev.uncomplex.dumphere.application.mcp.tools.PublishHtmlTool
 import dev.uncomplex.dumphere.application.mcp.tools.ReadFileContentsTool
 import dev.uncomplex.dumphere.application.mcp.tools.SetPageLiveTool
 import dev.uncomplex.dumphere.application.mcp.tools.UpdateHtmlTool
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import org.springframework.ai.mcp.annotation.McpTool
 import org.springframework.ai.mcp.annotation.McpToolParam
 import org.springframework.security.core.context.SecurityContextHolder
@@ -26,15 +26,17 @@ class HtmlshareMcpTools(
 ) {
     @McpTool(
         name = "get_artifact_metadata",
-        description = "Read an artifact's metadata, including customMetadata key-value pairs, effective visibility, and public access deadline without changing it",
+        description =
+            "Read an artifact's metadata, including customMetadata key-value pairs, effective visibility, and public access deadline without changing it",
     )
     fun getArtifactMetadata(
-        @McpToolParam(description = "Published artifact id", required = true) id: String,
+        @McpToolParam(description = "Published artifact id", required = true) id: String
     ): PublishedPage = requireNotNull(store.readMetadata(id)) { "page not found: $id" }
 
     @McpTool(
         name = "set_artifact_metadata",
-        description = "Set one custom metadata key on an artifact, preserving JSON value types. Pass null to remove that key. Other keys and artifact content are unchanged; no content version is created. Returns artifact metadata including customMetadata.",
+        description =
+            "Set one custom metadata key on an artifact, preserving JSON value types. Pass null to remove that key. Other keys and artifact content are unchanged; no content version is created. Returns artifact metadata including customMetadata.",
     )
     fun setArtifactMetadata(
         @McpToolParam(description = "Published artifact id", required = true) id: String,
@@ -47,7 +49,8 @@ class HtmlshareMcpTools(
 
     @McpTool(
         name = "set_artifact_visibility",
-        description = """
+        description =
+            """
             Set internal or public access. Public access lasts 30 days.
             Already-public artifacts keep their deadline. Expired artifacts can be shared again.
         """,
@@ -56,7 +59,9 @@ class HtmlshareMcpTools(
         @McpToolParam(description = "Published artifact id", required = true) id: String,
         @McpToolParam(description = "internal or public", required = true) visibility: String,
     ): PublishedPage =
-        requireNotNull(store.setVisibility(id, ArtifactVisibility.parse(visibility), currentUser())) { "page not found: $id" }
+        requireNotNull(store.setVisibility(id, ArtifactVisibility.parse(visibility), currentUser())) {
+            "page not found: $id"
+        }
 
     @McpTool(
         name = "publish_html",
@@ -65,10 +70,8 @@ class HtmlshareMcpTools(
     fun publishHtml(
         @McpToolParam(description = "Complete HTML or Markdown document or fragment to publish", required = true)
         contents: String,
-        @McpToolParam(description = "Content format: html or markdown", required = true)
-        format: String,
-        @McpToolParam(description = "Short human-readable file name", required = false)
-        file_name: String?,
+        @McpToolParam(description = "Content format: html or markdown", required = true) format: String,
+        @McpToolParam(description = "Short human-readable file name", required = false) file_name: String?,
     ): PublishedPage = publishHtmlTool.execute(contents, format, file_name, currentUser())
 
     @McpTool(
@@ -86,10 +89,8 @@ class HtmlshareMcpTools(
             """,
     )
     fun readFileContents(
-        @McpToolParam(description = "Published page id", required = true)
-        id: String,
-        @McpToolParam(description = "The line number to start reading from (1-indexed)", required = false)
-        offset: Int?,
+        @McpToolParam(description = "Published page id", required = true) id: String,
+        @McpToolParam(description = "The line number to start reading from (1-indexed)", required = false) offset: Int?,
         @McpToolParam(description = "The maximum number of lines to read (defaults to 2000)", required = false)
         limit: Int?,
     ): String = readFileContentsTool.execute(id, offset, limit)
@@ -99,8 +100,7 @@ class HtmlshareMcpTools(
         description = "Replace an existing published HTML or Markdown page contents and return the same link",
     )
     fun updateHtml(
-        @McpToolParam(description = "Published page id", required = true)
-        id: String,
+        @McpToolParam(description = "Published page id", required = true) id: String,
         @McpToolParam(description = "Replacement HTML or Markdown document or fragment", required = true)
         contents: String,
     ): PublishedPage = updateHtmlTool.execute(id, contents, currentUser())
@@ -120,10 +120,8 @@ class HtmlshareMcpTools(
             """,
     )
     fun editFileContents(
-        @McpToolParam(description = "Published page id", required = true)
-        id: String,
-        @McpToolParam(description = "The text to replace", required = true)
-        oldString: String,
+        @McpToolParam(description = "Published page id", required = true) id: String,
+        @McpToolParam(description = "The text to replace", required = true) oldString: String,
         @McpToolParam(description = "The text to replace it with (must be different from oldString)", required = true)
         newString: String,
         @McpToolParam(description = "Replace all occurrences of oldString (default false)", required = false)
@@ -132,13 +130,12 @@ class HtmlshareMcpTools(
 
     @McpTool(
         name = "enable_live_reload",
-        description = "Enable or disable live-reload for a published page. When enabled, the page automatically refreshes after each edit.",
+        description =
+            "Enable or disable live-reload for a published page. When enabled, the page automatically refreshes after each edit.",
     )
     fun enableLiveReload(
-        @McpToolParam(description = "Published page id", required = true)
-        id: String,
-        @McpToolParam(description = "Enable live reload", required = true)
-        live: Boolean,
+        @McpToolParam(description = "Published page id", required = true) id: String,
+        @McpToolParam(description = "Enable live reload", required = true) live: Boolean,
     ): PublishedPage = setPageLiveTool.execute(id, live, currentUser())
 
     private fun currentUser() = users.resolve(SecurityContextHolder.getContext().authentication)

@@ -14,24 +14,20 @@ import org.springframework.web.util.HtmlUtils
 
 @Service
 class PageContentRenderer {
-    private val extensions = listOf(
-        TablesExtension.create(),
-        StrikethroughExtension.create(),
-        TaskListItemsExtension.create(),
-        YamlFrontMatterExtension.create(),
-        HeadingAnchorExtension.create(),
-        FootnotesExtension.create(),
-        AutolinkExtension.create(),
-    )
+    private val extensions =
+        listOf(
+            TablesExtension.create(),
+            StrikethroughExtension.create(),
+            TaskListItemsExtension.create(),
+            YamlFrontMatterExtension.create(),
+            HeadingAnchorExtension.create(),
+            FootnotesExtension.create(),
+            AutolinkExtension.create(),
+        )
 
     private val markdownParser = Parser.builder().extensions(extensions).build()
     private val markdownRenderer =
-        HtmlRenderer
-            .builder()
-            .extensions(extensions)
-            .escapeHtml(true)
-            .sanitizeUrls(true)
-            .build()
+        HtmlRenderer.builder().extensions(extensions).escapeHtml(true).sanitizeUrls(true).build()
 
     fun render(
         contents: String,
@@ -163,6 +159,7 @@ class PageContentRenderer {
               </main>
             </body>
             </html>
-            """.trimIndent()
+            """
+            .trimIndent()
     }
 }

@@ -20,14 +20,11 @@ class SetCommentReactionUsecase(
     fun execute(command: Command): Result {
         val existing = comments.findById(command.commentId).orElse(null) ?: return Result.NotFound
         val thread =
-            threads
-                .findByIdForUpdate(existing.threadId)
-                ?.takeIf { it.artifactId == command.artifactId && it.deletedAt == null } ?: return Result.NotFound
+            threads.findByIdForUpdate(existing.threadId)?.takeIf {
+                it.artifactId == command.artifactId && it.deletedAt == null
+            } ?: return Result.NotFound
         val comment =
-            comments
-                .findById(command.commentId)
-                .orElse(null)
-                ?.takeIf { it.deletedAt == null } ?: return Result.NotFound
+            comments.findById(command.commentId).orElse(null)?.takeIf { it.deletedAt == null } ?: return Result.NotFound
 
         val user = command.author
         val changed =
@@ -60,9 +57,7 @@ class SetCommentReactionUsecase(
     )
 
     sealed interface Result {
-        data class Success(
-            val state: CommentReactionState,
-        ) : Result
+        data class Success(val state: CommentReactionState) : Result
 
         data object NotFound : Result
     }

@@ -3,12 +3,9 @@ package dev.uncomplex.dumphere.application
 import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonValue
 
-enum class ArtifactVisibility(
-    @get:JsonValue val value: String,
-) {
+enum class ArtifactVisibility(@get:JsonValue val value: String) {
     INTERNAL("internal"),
-    PUBLIC("public"),
-    ;
+    PUBLIC("public");
 
     companion object {
         @JvmStatic

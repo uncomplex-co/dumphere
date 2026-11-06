@@ -20,17 +20,16 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 @Configuration
 class AuthorizationServerConfig {
     @Bean
-    fun registeredClientRepository(jdbcTemplate: JdbcTemplate): RegisteredClientRepository = JdbcRegisteredClientRepository(jdbcTemplate)
+    fun registeredClientRepository(jdbcTemplate: JdbcTemplate): RegisteredClientRepository =
+        JdbcRegisteredClientRepository(jdbcTemplate)
 
     @Bean
     @DependsOnDatabaseInitialization
     fun jwkSet(signingKeys: JdbcMcpSigningKeys): JWKSet = JWKSet(signingKeys.loadOrCreate())
 
-    @Bean
-    fun jwkSource(jwkSet: JWKSet): JWKSource<SecurityContext> = ImmutableJWKSet(jwkSet)
+    @Bean fun jwkSource(jwkSet: JWKSet): JWKSource<SecurityContext> = ImmutableJWKSet(jwkSet)
 
-    @Bean
-    fun jwtEncoder(jwkSource: JWKSource<SecurityContext>): JwtEncoder = NimbusJwtEncoder(jwkSource)
+    @Bean fun jwtEncoder(jwkSource: JWKSource<SecurityContext>): JwtEncoder = NimbusJwtEncoder(jwkSource)
 
     @Bean
     fun jwtDecoder(jwkSet: JWKSet): JwtDecoder {

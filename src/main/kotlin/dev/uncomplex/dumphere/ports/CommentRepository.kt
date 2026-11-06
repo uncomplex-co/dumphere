@@ -1,9 +1,9 @@
 package dev.uncomplex.dumphere.ports
 
 import dev.uncomplex.dumphere.application.CommentEntity
-import org.springframework.data.jdbc.repository.query.Query
-import org.springframework.data.jdbc.repository.query.Modifying
 import java.time.Instant
+import org.springframework.data.jdbc.repository.query.Modifying
+import org.springframework.data.jdbc.repository.query.Query
 import org.springframework.data.repository.CrudRepository
 
 interface CommentRepository : CrudRepository<CommentEntity, Long> {
@@ -19,7 +19,7 @@ interface CommentRepository : CrudRepository<CommentEntity, Long> {
         where t.artifact_id = :artifactId and t.deleted_at is null and c.deleted_at is null
         order by max(c.created_at) over (partition by c.thread_id) desc,
                  t.id desc, c.created_at asc, c.id asc
-        """,
+        """
     )
     fun findArtifactComments(artifactId: String, subject: String? = null): List<CommentRecord>
 
@@ -34,7 +34,7 @@ interface CommentRepository : CrudRepository<CommentEntity, Long> {
         left join users u on u.id = c.author_user_id
         where t.artifact_id = :artifactId and t.id = :threadId and t.deleted_at is null and c.deleted_at is null
         order by c.created_at asc, c.id asc
-        """,
+        """
     )
     fun findThreadComments(artifactId: String, threadId: Long, subject: String? = null): List<CommentRecord>
 
@@ -54,7 +54,7 @@ interface CommentRepository : CrudRepository<CommentEntity, Long> {
             order by t.id, c.created_at asc, c.id asc
         ) summaries
         order by last_activity_at desc, thread_id desc
-        """,
+        """
     )
     fun findArtifactThreads(artifactId: String): List<CommentThreadRecord>
 

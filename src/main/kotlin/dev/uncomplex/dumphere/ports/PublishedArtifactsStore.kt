@@ -6,7 +6,12 @@ import dev.uncomplex.dumphere.application.PublishedPage
 import dev.uncomplex.dumphere.application.UserEntity
 
 interface PublishedArtifactsStore {
-    fun publish(title: String?, contents: String, contentFormat: PageContentFormat, createdBy: UserEntity?): PublishedPage
+    fun publish(
+        title: String?,
+        contents: String,
+        contentFormat: PageContentFormat,
+        createdBy: UserEntity?,
+    ): PublishedPage
 
     fun readContents(id: String): String?
 
@@ -14,7 +19,13 @@ interface PublishedArtifactsStore {
 
     fun update(id: String, contents: String, updatedBy: UserEntity?): PublishedPage?
 
-    fun edit(id: String, oldString: String, newString: String, replaceAll: Boolean, updatedBy: UserEntity?): PublishedPage?
+    fun edit(
+        id: String,
+        oldString: String,
+        newString: String,
+        replaceAll: Boolean,
+        updatedBy: UserEntity?,
+    ): PublishedPage?
 
     fun setLive(id: String, isLive: Boolean, updatedBy: UserEntity?): PublishedPage?
 

@@ -4,9 +4,7 @@ import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import org.springframework.stereotype.Service
 
 @Service
-class ReadFileContentsTool(
-    private val store: PublishedArtifactsStore,
-) {
+class ReadFileContentsTool(private val store: PublishedArtifactsStore) {
     fun execute(
         id: String,
         offset: Int?,
@@ -35,7 +33,7 @@ class ReadFileContentsTool(
             when {
                 slice.cut -> {
                     append(
-                        "\n\n(Output capped at $MAX_BYTES_LABEL. Showing lines $actualOffset-$last. Use offset=$next to continue.)",
+                        "\n\n(Output capped at $MAX_BYTES_LABEL. Showing lines $actualOffset-$last. Use offset=$next to continue.)"
                     )
                 }
 

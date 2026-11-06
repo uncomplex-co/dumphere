@@ -2,8 +2,7 @@ package dev.uncomplex.dumphere.application
 
 enum class PageContentFormat {
     HTML,
-    MARKDOWN,
-    ;
+    MARKDOWN;
 
     fun toolType(): String = name.lowercase()
 

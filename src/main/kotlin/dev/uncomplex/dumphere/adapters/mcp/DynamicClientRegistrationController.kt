@@ -1,6 +1,9 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import java.time.Duration
+import java.time.Instant
+import java.util.UUID
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.core.AuthorizationGrantType
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod
@@ -12,9 +15,6 @@ import org.springframework.security.oauth2.server.authorization.settings.TokenSe
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
-import java.time.Duration
-import java.time.Instant
-import java.util.UUID
 
 @RestController
 class DynamicClientRegistrationController(
@@ -22,9 +22,7 @@ class DynamicClientRegistrationController(
     private val passwordEncoder: PasswordEncoder,
 ) {
     @PostMapping("/connect/register")
-    fun register(
-        @RequestBody request: DynamicClientRegistrationRequest,
-    ): DynamicClientRegistrationResponse {
+    fun register(@RequestBody request: DynamicClientRegistrationRequest): DynamicClientRegistrationResponse {
         val clientId = UUID.randomUUID().toString()
         val clientSecret = UUID.randomUUID().toString()
         val scopes =
@@ -36,8 +34,7 @@ class DynamicClientRegistrationController(
                 .ifEmpty { setOf(OidcScopes.OPENID, OidcScopes.EMAIL, OidcScopes.PROFILE) }
 
         val client =
-            RegisteredClient
-                .withId(UUID.randomUUID().toString())
+            RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId(clientId)
                 .clientIdIssuedAt(Instant.now())
                 .clientSecret(requireNotNull(passwordEncoder.encode(clientSecret)))
@@ -49,19 +46,16 @@ class DynamicClientRegistrationController(
                 .redirectUris { it.addAll(request.redirectUris) }
                 .scopes { it.addAll(scopes) }
                 .clientSettings(
-                    ClientSettings
-                        .builder()
-                        .requireAuthorizationConsent(false)
-                        .requireProofKey(true)
-                        .build(),
-                ).tokenSettings(
-                    TokenSettings
-                        .builder()
+                    ClientSettings.builder().requireAuthorizationConsent(false).requireProofKey(true).build()
+                )
+                .tokenSettings(
+                    TokenSettings.builder()
                         .accessTokenTimeToLive(Duration.ofHours(1))
                         .refreshTokenTimeToLive(Duration.ofDays(30))
                         .reuseRefreshTokens(false)
-                        .build(),
-                ).build()
+                        .build()
+                )
+                .build()
 
         clients.save(client)
 

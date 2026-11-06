@@ -1,10 +1,10 @@
 package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
 import dev.uncomplex.dumphere.application.ArtifactVisibility
-import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.application.PageContentFormat
 import dev.uncomplex.dumphere.application.PublishedPage
-import dev.uncomplex.dumphere.adapters.authentication.AuthenticatedUsers
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -30,14 +30,10 @@ class PublicApiController(
     ): PublishedPage = store.setVisibility(id, request.visibility, resolveUser(authentication)) ?: throw notFound()
 
     @GetMapping("/api/pages/{id}")
-    fun metadata(
-        @PathVariable id: String,
-    ): PublishedPage = store.readMetadata(id) ?: throw notFound()
+    fun metadata(@PathVariable id: String): PublishedPage = store.readMetadata(id) ?: throw notFound()
 
     @GetMapping("/api/pages/{id}/version")
-    fun version(
-        @PathVariable id: String,
-    ): Map<String, Int> {
+    fun version(@PathVariable id: String): Map<String, Int> {
         val page = store.readMetadata(id) ?: throw notFound()
         return mapOf("version" to page.version)
     }
@@ -75,11 +71,10 @@ class PublicApiController(
         @RequestBody request: SetLiveRequest,
         authentication: Authentication,
     ): PublishedPage {
-        val page =
-            store.setLive(id, request.live, resolveUser(authentication))
-                ?: throw notFound()
+        val page = store.setLive(id, request.live, resolveUser(authentication)) ?: throw notFound()
         return page
     }
+
     private fun resolveUser(authentication: Authentication) = users.resolve(authentication)
 }
 
@@ -94,25 +89,24 @@ data class PublishFileResponse(
     val version: Int,
 )
 
-data class SetLiveRequest(
-    val live: Boolean,
-)
+data class SetLiveRequest(val live: Boolean)
 
-data class SetVisibilityRequest(
-    val visibility: ArtifactVisibility,
-)
+data class SetVisibilityRequest(val visibility: ArtifactVisibility)
 
 private fun PublishFileRequest.toPageContentFormat(): PageContentFormat =
     when (mimeType.trim().lowercase().substringBefore(';')) {
-        "text/html", "application/xhtml+xml" -> PageContentFormat.HTML
-        "text/markdown", "text/x-markdown" -> PageContentFormat.MARKDOWN
+        "text/html",
+        "application/xhtml+xml" -> PageContentFormat.HTML
+        "text/markdown",
+        "text/x-markdown" -> PageContentFormat.MARKDOWN
         "text/plain" -> title.toPageContentFormatByExtension()
         else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported mimeType")
     }
 
 private fun String.toPageContentFormatByExtension(): PageContentFormat =
     when (trim().lowercase().substringAfterLast('.', missingDelimiterValue = "")) {
-        "html", "htm" -> PageContentFormat.HTML
+        "html",
+        "htm" -> PageContentFormat.HTML
         "md" -> PageContentFormat.MARKDOWN
         else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported file extension")
     }

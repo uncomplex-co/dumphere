@@ -8,8 +8,9 @@ data class DiscussionReactions(val commentId: Long, val reactions: List<Discussi
 
 data class DiscussionReaction(val emoji: String, val author: String) {
     companion object {
-        fun from(reactions: List<CommentReaction>): List<DiscussionReaction> =
-            reactions.flatMap { reaction -> reaction.users.map { DiscussionReaction(reaction.emoji, it) } }
+        fun from(reactions: List<CommentReaction>): List<DiscussionReaction> = reactions.flatMap { reaction ->
+            reaction.users.map { DiscussionReaction(reaction.emoji, it) }
+        }
     }
 }
 
@@ -30,20 +31,21 @@ data class DiscussionComment(
     val reactions: List<DiscussionReaction>,
 ) {
     companion object {
-        fun from(comment: ArtifactComment) = DiscussionComment(
-            id = comment.id,
-            threadId = comment.threadId,
-            threadNumber = comment.threadNumber,
-            body = comment.body,
-            author = comment.author,
-            createdAt = comment.createdAt,
-            xpath = comment.xpath,
-            relativeX = comment.relativeX,
-            relativeY = comment.relativeY,
-            editedAt = comment.editedAt,
-            canEdit = comment.canEdit,
-            resolvedAt = comment.resolvedAt,
-            reactions = DiscussionReaction.from(comment.reactions),
-        )
+        fun from(comment: ArtifactComment) =
+            DiscussionComment(
+                id = comment.id,
+                threadId = comment.threadId,
+                threadNumber = comment.threadNumber,
+                body = comment.body,
+                author = comment.author,
+                createdAt = comment.createdAt,
+                xpath = comment.xpath,
+                relativeX = comment.relativeX,
+                relativeY = comment.relativeY,
+                editedAt = comment.editedAt,
+                canEdit = comment.canEdit,
+                resolvedAt = comment.resolvedAt,
+                reactions = DiscussionReaction.from(comment.reactions),
+            )
     }
 }

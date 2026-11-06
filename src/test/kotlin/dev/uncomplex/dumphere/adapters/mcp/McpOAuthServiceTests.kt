@@ -5,18 +5,6 @@ import dev.uncomplex.dumphere.application.SamePageAppProperties
 import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.ports.UserRepository
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.security.crypto.password.PasswordEncoder
-import org.springframework.security.oauth2.core.AuthorizationGrantType
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod
-import org.springframework.security.oauth2.jwt.JwtDecoder
-import org.springframework.security.oauth2.jwt.JwtEncoder
-import org.springframework.security.oauth2.server.authorization.client.RegisteredClient
-import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository
-import org.springframework.test.context.DynamicPropertyRegistry
-import org.springframework.test.context.DynamicPropertySource
 import java.security.MessageDigest
 import java.sql.Timestamp
 import java.time.Duration
@@ -33,12 +21,25 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.security.oauth2.core.AuthorizationGrantType
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod
+import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.oauth2.jwt.JwtEncoder
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClient
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 
 @SpringBootTest(
-    properties = [
-        "spring.security.oauth2.client.registration.google.client-id=test-client",
-        "spring.security.oauth2.client.registration.google.client-secret=test-secret",
-    ],
+    properties =
+        [
+            "spring.security.oauth2.client.registration.google.client-id=test-client",
+            "spring.security.oauth2.client.registration.google.client-secret=test-secret",
+        ]
 )
 class McpOAuthServiceTests {
     @Autowired private lateinit var service: McpOAuthService
@@ -72,7 +73,13 @@ class McpOAuthServiceTests {
 
     @Test
     fun preservesProfileClaimsInAccessAndRefreshedTokens() {
-        verifyTokenClaims(AuthenticatedUser(subject = UUID.randomUUID().toString(), email = "user@example.com", displayName = "Test User"))
+        verifyTokenClaims(
+            AuthenticatedUser(
+                subject = UUID.randomUUID().toString(),
+                email = "user@example.com",
+                displayName = "Test User",
+            )
+        )
     }
 
     private fun verifyTokenClaims(user: AuthenticatedUser) {
@@ -97,7 +104,12 @@ class McpOAuthServiceTests {
     fun persistsOnlyHashesWithThirtyDayExpiryAndRotatesAcrossServiceInstances() {
         val before = Instant.now()
         val (client, access) = issue(AuthenticatedUser("persistent-user", "user@example.com", "Persistent User"))
-        val hashes = jdbc.queryForList("select token_hash from mcp_refresh_tokens where client_id = ?", String::class.java, client.clientId)
+        val hashes =
+            jdbc.queryForList(
+                "select token_hash from mcp_refresh_tokens where client_id = ?",
+                String::class.java,
+                client.clientId,
+            )
         assertEquals(listOf(hash(access.refreshToken)), hashes)
         assertFalse(hashes.contains(access.refreshToken))
         val expiry =
@@ -112,10 +124,27 @@ class McpOAuthServiceTests {
         assertTrue(!expiry.isAfter(Instant.now().plus(Duration.ofDays(30))))
 
         // A new service and repository have no access to the original service's memory.
-        val restarted = McpOAuthService(clients, passwordEncoder, encoder, properties, JdbcMcpRefreshTokens(jdbc), users)
-        val refreshed = restarted.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret")
+        val restarted =
+            McpOAuthService(
+                clients,
+                passwordEncoder,
+                encoder,
+                properties,
+                JdbcMcpRefreshTokens(jdbc),
+                users,
+            )
+        val refreshed =
+            restarted.exchangeRefreshToken(
+                access.refreshToken,
+                null,
+                client.clientId,
+                "test-secret",
+            )
         assertEquals("persistent-user", decoder.decode(refreshed.accessToken).subject)
-        assertEquals("user@example.com", decoder.decode(refreshed.accessToken).getClaimAsString("email"))
+        assertEquals(
+            "user@example.com",
+            decoder.decode(refreshed.accessToken).getClaimAsString("email"),
+        )
         assertEquals(
             listOf(hash(refreshed.refreshToken)),
             jdbc.queryForList(
@@ -124,16 +153,22 @@ class McpOAuthServiceTests {
                 client.clientId,
             ),
         )
-        assertFailsWith<OAuthTokenException> { service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret") }
+        assertFailsWith<OAuthTokenException> {
+            service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret")
+        }
         service.exchangeRefreshToken(refreshed.refreshToken, null, client.clientId, "test-secret")
     }
 
     @Test
     fun rejectsExpiredTokensAndBadClientCredentialsWithoutConsumingValidTokens() {
         val (client, access) = issue(AuthenticatedUser("expiry-user"))
-        assertFailsWith<OAuthTokenException> { service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "wrong-secret") }
+        assertFailsWith<OAuthTokenException> {
+            service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "wrong-secret")
+        }
         val (other, _) = issue(AuthenticatedUser("other-user"))
-        assertFailsWith<OAuthTokenException> { service.exchangeRefreshToken(access.refreshToken, null, other.clientId, "test-secret") }
+        assertFailsWith<OAuthTokenException> {
+            service.exchangeRefreshToken(access.refreshToken, null, other.clientId, "test-secret")
+        }
         val rotated = service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret")
         jdbc.update(
             "update mcp_refresh_tokens set expires_at = ? where token_hash = ?",
@@ -162,7 +197,12 @@ class McpOAuthServiceTests {
                     executor.submit<Boolean> {
                         start.await()
                         try {
-                            service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret")
+                            service.exchangeRefreshToken(
+                                access.refreshToken,
+                                null,
+                                client.clientId,
+                                "test-secret",
+                            )
                             true
                         } catch (error: OAuthTokenException) {
                             assertEquals("invalid_grant", error.error)
@@ -175,20 +215,34 @@ class McpOAuthServiceTests {
         }
         assertEquals(
             1,
-            jdbc.queryForObject("select count(*) from mcp_refresh_tokens where client_id = ?", Int::class.java, client.clientId),
+            jdbc.queryForObject(
+                "select count(*) from mcp_refresh_tokens where client_id = ?",
+                Int::class.java,
+                client.clientId,
+            ),
         )
     }
 
     @Test
     fun refusesToIssueTokensForAnIdentityThatIsNotASystemUser() {
         val subject = UUID.randomUUID().toString()
-        val before = jdbc.queryForObject("select count(*) from mcp_refresh_tokens where expires_at > current_timestamp", Int::class.java)
-        val error = assertFailsWith<OAuthTokenException> { issue(AuthenticatedUser(subject), provisionUser = false) }
+        val before =
+            jdbc.queryForObject(
+                "select count(*) from mcp_refresh_tokens where expires_at > current_timestamp",
+                Int::class.java,
+            )
+        val error =
+            assertFailsWith<OAuthTokenException> {
+                issue(AuthenticatedUser(subject), provisionUser = false)
+            }
         assertEquals("invalid_grant", error.error)
         assertNull(users.findBySubject(subject))
         assertEquals(
             before,
-            jdbc.queryForObject("select count(*) from mcp_refresh_tokens where expires_at > current_timestamp", Int::class.java),
+            jdbc.queryForObject(
+                "select count(*) from mcp_refresh_tokens where expires_at > current_timestamp",
+                Int::class.java,
+            ),
         )
     }
 
@@ -199,12 +253,30 @@ class McpOAuthServiceTests {
         val userId = requireNotNull(users.findBySubject(subject)?.id)
         assertEquals(
             userId,
-            jdbc.queryForObject("select user_id from mcp_refresh_tokens where token_hash = ?", Long::class.java, hash(access.refreshToken)),
+            jdbc.queryForObject(
+                "select user_id from mcp_refresh_tokens where token_hash = ?",
+                Long::class.java,
+                hash(access.refreshToken),
+            ),
         )
         users.deleteById(userId)
-        assertEquals(0, jdbc.queryForObject("select count(*) from mcp_refresh_tokens where user_id = ?", Int::class.java, userId))
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from mcp_refresh_tokens where user_id = ?",
+                Int::class.java,
+                userId,
+            ),
+        )
         val error =
-            assertFailsWith<OAuthTokenException> { service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret") }
+            assertFailsWith<OAuthTokenException> {
+                service.exchangeRefreshToken(
+                    access.refreshToken,
+                    null,
+                    client.clientId,
+                    "test-secret",
+                )
+            }
         assertEquals("invalid_grant", error.error)
     }
 
@@ -212,7 +284,12 @@ class McpOAuthServiceTests {
     fun refreshedClaimsComeFromTheCurrentUserRowNotTheOriginalLoginSnapshot() {
         val subject = UUID.randomUUID().toString()
         val (client, access) = issue(AuthenticatedUser(subject, "old@example.com", "Old Name"))
-        jdbc.update("update users set email = ?, display_name = ? where subject = ?", "new@example.com", "New Name", subject)
+        jdbc.update(
+            "update users set email = ?, display_name = ? where subject = ?",
+            "new@example.com",
+            "New Name",
+            subject,
+        )
         val refreshed = service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret")
         val jwt = decoder.decode(refreshed.accessToken)
         assertEquals("new@example.com", jwt.getClaimAsString("email"))
@@ -234,8 +311,7 @@ class McpOAuthServiceTests {
         if (provisionUser) provisioning.provision(user)
         val id = UUID.randomUUID().toString()
         val client =
-            RegisteredClient
-                .withId(id)
+            RegisteredClient.withId(id)
                 .clientId(id)
                 .clientSecret(requireNotNull(passwordEncoder.encode("test-secret")))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
@@ -247,8 +323,7 @@ class McpOAuthServiceTests {
         clients.save(client)
         val verifier = "test-code-verifier-with-at-least-forty-three-characters"
         val challenge =
-            Base64
-                .getUrlEncoder()
+            Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()))
         val request =
@@ -276,8 +351,7 @@ class McpOAuthServiceTests {
     }
 
     private fun hash(token: String): String =
-        Base64
-            .getUrlEncoder()
+        Base64.getUrlEncoder()
             .withoutPadding()
             .encodeToString(MessageDigest.getInstance("SHA-256").digest(token.toByteArray()))
 }

@@ -8,12 +8,12 @@ import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Component
 
 @Component
-class ArtifactAccess(
-    private val domains: AllowedEmailDomainPolicy,
-) {
+class ArtifactAccess(private val domains: AllowedEmailDomainPolicy) {
     fun isMember(authentication: Authentication?): Boolean =
-        authentication != null && authentication.isAuthenticated &&
-            authentication !is AnonymousAuthenticationToken && domains.isAllowed(authentication)
+        authentication != null &&
+            authentication.isAuthenticated &&
+            authentication !is AnonymousAuthenticationToken &&
+            domains.isAllowed(authentication)
 
     fun canView(
         page: PublishedPage,

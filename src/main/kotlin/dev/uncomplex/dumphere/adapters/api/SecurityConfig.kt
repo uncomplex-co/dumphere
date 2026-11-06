@@ -2,9 +2,11 @@ package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.adapters.mcp.OAuthMetadataEntryPoint
 import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
-import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.application.SamePageAppProperties
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import jakarta.servlet.http.HttpServletRequest
+import java.time.Instant
+import kotlin.collections.plus
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -31,8 +33,6 @@ import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
-import java.time.Instant
-import kotlin.collections.plus
 
 @Configuration
 class SecurityConfig(
@@ -51,7 +51,7 @@ class SecurityConfig(
             .securityMatcher("/api/**")
             .csrf { it.disable() }
             .authorizeHttpRequests { requests -> requests.anyRequest().authenticated() }
-            .httpBasic { }
+            .httpBasic {}
 
         return http.build()
     }
@@ -61,10 +61,22 @@ class SecurityConfig(
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
             .csrf { csrf ->
-                csrf.ignoringRequestMatchers(matcher("/mcp"), matcher("/api/**"), matcher("/connect/register"), matcher("/oauth2/token"))
-            }.authorizeHttpRequests { requests ->
+                csrf.ignoringRequestMatchers(
+                    matcher("/mcp"),
+                    matcher("/api/**"),
+                    matcher("/connect/register"),
+                    matcher("/oauth2/token"),
+                )
+            }
+            .authorizeHttpRequests { requests ->
                 requests
-                    .requestMatchers("/error", "/login/**", "/oauth2/authorization/**", "/login/oauth2/**", "/viewer/**")
+                    .requestMatchers(
+                        "/error",
+                        "/login/**",
+                        "/oauth2/authorization/**",
+                        "/login/oauth2/**",
+                        "/viewer/**",
+                    )
                     .permitAll()
                     .requestMatchers(
                         "/.well-known/oauth-protected-resource",
@@ -73,7 +85,8 @@ class SecurityConfig(
                         "/oauth2/jwks",
                         "/oauth2/token",
                         "/connect/register",
-                    ).permitAll()
+                    )
+                    .permitAll()
                     .requestMatchers(
                         matcher("/p/{id}"),
                         matcher("/p/{id}/content"),
@@ -85,30 +98,39 @@ class SecurityConfig(
                         matcher("/p/{id}/comments/{commentId}/reaction"),
                         matcher("/p/{id}/threads/{threadId}/comments"),
                         matcher("/p/{id}/threads/{threadId}/resolution"),
-                    ).access { authentication, context ->
+                    )
+                    .access { authentication, context ->
                         val auth = authentication.get()
                         AuthorizationDecision(
                             artifactAccess.isMember(auth) ||
-                                context.variables["id"]?.let { pages.readMetadata(it) }?.let { artifactAccess.canView(it, auth) } == true,
+                                context.variables["id"]
+                                    ?.let { pages.readMetadata(it) }
+                                    ?.let { artifactAccess.canView(it, auth) } == true
                         )
-                    }.anyRequest()
+                    }
+                    .anyRequest()
                     .access { authentication, _ ->
                         val auth = authentication.get()
                         AuthorizationDecision(
-                            auth.isAuthenticated && auth !is AnonymousAuthenticationToken &&
-                                allowedEmailDomainPolicy.isAllowed(auth),
+                            auth.isAuthenticated &&
+                                auth !is AnonymousAuthenticationToken &&
+                                allowedEmailDomainPolicy.isAllowed(auth)
                         )
                     }
-            }.oauth2Login { oauth ->
+            }
+            .oauth2Login { oauth ->
                 oauth.loginPage("/login")
                 oauth.authorizationEndpoint { endpoint ->
-                    endpoint.authorizationRequestResolver(googleAccountPickerRequestResolver(clientRegistrationRepository))
+                    endpoint.authorizationRequestResolver(
+                        googleAccountPickerRequestResolver(clientRegistrationRepository)
+                    )
                 }
                 oauth.userInfoEndpoint { userInfo -> userInfo.userAuthoritiesMapper(authTimeAuthoritiesMapper()) }
                 oauth.successHandler(authenticationSuccessHandler())
-            }.oauth2ResourceServer { resourceServer ->
+            }
+            .oauth2ResourceServer { resourceServer ->
                 resourceServer.authenticationEntryPoint(OAuthMetadataEntryPoint(properties))
-                resourceServer.jwt { }
+                resourceServer.jwt {}
                 resourceServer.protectedResourceMetadata { metadata ->
                     val baseUrl = properties.publicBaseUrl.trimEnd('/')
                     metadata.protectedResourceMetadataCustomizer { builder ->
@@ -122,9 +144,11 @@ class SecurityConfig(
                             .tlsClientCertificateBoundAccessTokens(false)
                     }
                 }
-            }.headers { headers ->
+            }
+            .headers { headers ->
                 headers.frameOptions { it.sameOrigin() }
-            }.exceptionHandling { exceptions ->
+            }
+            .exceptionHandling { exceptions ->
                 exceptions.defaultAuthenticationEntryPointFor(
                     OAuthMetadataEntryPoint(properties),
                     matcher("/mcp"),
@@ -135,9 +159,18 @@ class SecurityConfig(
                 )
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/authorize"))
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/oauth2/consent"))
-                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/status"))
-                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments"))
-                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/p/{id}/comments/{commentId}/reaction"))
+                exceptions.defaultAuthenticationEntryPointFor(
+                    HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                    matcher("/p/{id}/status"),
+                )
+                exceptions.defaultAuthenticationEntryPointFor(
+                    HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                    matcher("/p/{id}/comments"),
+                )
+                exceptions.defaultAuthenticationEntryPointFor(
+                    HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                    matcher("/p/{id}/comments/{commentId}/reaction"),
+                )
                 exceptions.defaultAuthenticationEntryPointFor(
                     HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                     matcher("/p/{id}/comments/{commentId}"),
@@ -146,12 +179,18 @@ class SecurityConfig(
                     HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                     matcher("/p/{id}/threads/{threadId}/resolution"),
                 )
-                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED), matcher("/account/artifacts"))
+                exceptions.defaultAuthenticationEntryPointFor(
+                    HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                    matcher("/account/artifacts"),
+                )
                 exceptions.defaultAuthenticationEntryPointFor(
                     HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                     matcher("/p/{id}/threads/{threadId}/comments"),
                 )
-                exceptions.defaultAuthenticationEntryPointFor(HttpStatusEntryPoint(HttpStatus.FORBIDDEN), matcher("/p/{id}/visibility"))
+                exceptions.defaultAuthenticationEntryPointFor(
+                    HttpStatusEntryPoint(HttpStatus.FORBIDDEN),
+                    matcher("/p/{id}/visibility"),
+                )
                 exceptions.defaultAuthenticationEntryPointFor(loginRedirectEntryPoint(), matcher("/p/**"))
             }
 
@@ -173,14 +212,13 @@ class SecurityConfig(
         }
     }
 
-    private fun loginRedirectEntryPoint(): AuthenticationEntryPoint =
-        AuthenticationEntryPoint { request, response, _ ->
-            response.sendRedirect(RedirectUrlSupport.loginUrl(RedirectUrlSupport.currentRequestUrl(request)))
-        }
+    private fun loginRedirectEntryPoint(): AuthenticationEntryPoint = AuthenticationEntryPoint { request, response, _ ->
+        response.sendRedirect(RedirectUrlSupport.loginUrl(RedirectUrlSupport.currentRequestUrl(request)))
+    }
 
     @Bean
     fun googleAccountPickerRequestResolver(
-        clientRegistrationRepository: ClientRegistrationRepository,
+        clientRegistrationRepository: ClientRegistrationRepository
     ): OAuth2AuthorizationRequestResolver {
         val delegate = DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization")
         delegate.setAuthorizationRequestCustomizer { builder ->
@@ -194,23 +232,22 @@ class SecurityConfig(
             override fun resolve(
                 request: HttpServletRequest,
                 clientRegistrationId: String,
-            ): OAuth2AuthorizationRequest? = customizeAuthorizationRequest(delegate.resolve(request, clientRegistrationId), request)
+            ): OAuth2AuthorizationRequest? =
+                customizeAuthorizationRequest(delegate.resolve(request, clientRegistrationId), request)
         }
     }
 
     @Bean
-    fun authTimeAuthoritiesMapper(): GrantedAuthoritiesMapper =
-        GrantedAuthoritiesMapper { authorities ->
-            authorities.withAuthenticationTime()
-        }
+    fun authTimeAuthoritiesMapper(): GrantedAuthoritiesMapper = GrantedAuthoritiesMapper { authorities ->
+        authorities.withAuthenticationTime()
+    }
 
     private fun Collection<GrantedAuthority>.withAuthenticationTime(): Collection<GrantedAuthority> =
         if (any { it is FactorGrantedAuthority }) {
             this
         } else {
             this +
-                FactorGrantedAuthority
-                    .withAuthority(FactorGrantedAuthority.AUTHORIZATION_CODE_AUTHORITY)
+                FactorGrantedAuthority.withAuthority(FactorGrantedAuthority.AUTHORIZATION_CODE_AUTHORITY)
                     .issuedAt(Instant.now())
                     .build()
         }
@@ -230,22 +267,17 @@ class SecurityConfig(
         val stateId = RedirectUrlSupport.newStateId()
         RedirectUrlSupport.remember(request.session, stateId, redirectUrl)
 
-        return OAuth2AuthorizationRequest
-            .from(resolvedRequest)
-            .state(stateId)
-            .build()
+        return OAuth2AuthorizationRequest.from(resolvedRequest).state(stateId).build()
     }
 
-    @Bean
-    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
+    @Bean fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
 
     @Bean
     fun userDetailsService(passwordEncoder: PasswordEncoder): UserDetailsService =
         InMemoryUserDetailsManager(
-            User
-                .withUsername(properties.apiUsername)
+            User.withUsername(properties.apiUsername)
                 .password(passwordEncoder.encode(properties.apiPassword))
                 .roles("API")
-                .build(),
+                .build()
         )
 }

@@ -8,14 +8,12 @@ import org.springframework.http.MediaType
 import org.springframework.security.authentication.AnonymousAuthenticationToken
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
-import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-class LoginController(
-    private val allowedEmailDomainPolicy: AllowedEmailDomainPolicy,
-) {
+class LoginController(private val allowedEmailDomainPolicy: AllowedEmailDomainPolicy) {
     @GetMapping("/login", produces = [MediaType.TEXT_HTML_VALUE])
     fun login(
         request: HttpServletRequest,
@@ -25,13 +23,21 @@ class LoginController(
     ): String? {
         val sanitizedRedirectUrl = RedirectUrlSupport.sanitize(redirectUrl)
 
-        if (authentication != null && authentication.isAuthenticated && !allowedEmailDomainPolicy.isAllowed(authentication)) {
+        if (
+            authentication != null &&
+                authentication.isAuthenticated &&
+                !allowedEmailDomainPolicy.isAllowed(authentication)
+        ) {
             request.getSession(false)?.invalidate()
             SecurityContextHolder.clearContext()
         }
 
-        if (authentication != null && authentication.isAuthenticated && authentication !is AnonymousAuthenticationToken &&
-            authentication.authenticatedUser() != null && allowedEmailDomainPolicy.isAllowed(authentication)
+        if (
+            authentication != null &&
+                authentication.isAuthenticated &&
+                authentication !is AnonymousAuthenticationToken &&
+                authentication.authenticatedUser() != null &&
+                allowedEmailDomainPolicy.isAllowed(authentication)
         ) {
             response.sendRedirect(sanitizedRedirectUrl ?: "/login/success")
             return null
@@ -62,7 +68,8 @@ class LoginController(
               </main>
             </body>
             </html>
-            """.trimIndent()
+            """
+            .trimIndent()
     }
 
     @GetMapping("/login/success", produces = [MediaType.TEXT_PLAIN_VALUE])
@@ -79,7 +86,7 @@ class LoginController(
                         '"' -> "&quot;"
                         '\'' -> "&#39;"
                         else -> char
-                    },
+                    }
                 )
             }
         }

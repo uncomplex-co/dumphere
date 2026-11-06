@@ -41,7 +41,9 @@ object HtmlDocumentEditor {
         }
 
         if (notFound) {
-            error("Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings.")
+            error(
+                "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."
+            )
         }
 
         error("Found multiple matches for oldString. Provide more surrounding context to make the match unique.")
@@ -93,313 +95,304 @@ object HtmlDocumentEditor {
     private fun simpleReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            if (content.contains(find)) {
-                yield(find)
-            }
+    ): Sequence<String> = sequence {
+        if (content.contains(find)) {
+            yield(find)
         }
+    }
 
     private fun lineTrimmedReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            val originalLines = content.split("\n")
-            val searchLines = find.split("\n").toMutableList()
-            if (searchLines.lastOrNull().isNullOrEmpty()) {
-                searchLines.removeLast()
-            }
-            if (searchLines.isEmpty()) {
-                return@sequence
-            }
-
-            for (start in 0..originalLines.size - searchLines.size) {
-                var matches = true
-                for (index in searchLines.indices) {
-                    if (originalLines[start + index].trim() != searchLines[index].trim()) {
-                        matches = false
-                        break
-                    }
-                }
-
-                if (!matches) {
-                    continue
-                }
-
-                val matchStartIndex = prefixLength(originalLines, start)
-                val matchEndIndex = blockEndIndex(originalLines, start, searchLines.size)
-                yield(content.substring(matchStartIndex, matchEndIndex))
-            }
+    ): Sequence<String> = sequence {
+        val originalLines = content.split("\n")
+        val searchLines = find.split("\n").toMutableList()
+        if (searchLines.lastOrNull().isNullOrEmpty()) {
+            searchLines.removeLast()
         }
+        if (searchLines.isEmpty()) {
+            return@sequence
+        }
+
+        for (start in 0..originalLines.size - searchLines.size) {
+            var matches = true
+            for (index in searchLines.indices) {
+                if (originalLines[start + index].trim() != searchLines[index].trim()) {
+                    matches = false
+                    break
+                }
+            }
+
+            if (!matches) {
+                continue
+            }
+
+            val matchStartIndex = prefixLength(originalLines, start)
+            val matchEndIndex = blockEndIndex(originalLines, start, searchLines.size)
+            yield(content.substring(matchStartIndex, matchEndIndex))
+        }
+    }
 
     private fun blockAnchorReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            val originalLines = content.split("\n")
-            val searchLines = find.split("\n").toMutableList()
-            if (searchLines.size < 3) {
-                return@sequence
-            }
-            if (searchLines.lastOrNull().isNullOrEmpty()) {
-                searchLines.removeLast()
+    ): Sequence<String> = sequence {
+        val originalLines = content.split("\n")
+        val searchLines = find.split("\n").toMutableList()
+        if (searchLines.size < 3) {
+            return@sequence
+        }
+        if (searchLines.lastOrNull().isNullOrEmpty()) {
+            searchLines.removeLast()
+        }
+
+        val firstLineSearch = searchLines.first().trim()
+        val lastLineSearch = searchLines.last().trim()
+        val candidates = mutableListOf<Pair<Int, Int>>()
+
+        for (start in originalLines.indices) {
+            if (originalLines[start].trim() != firstLineSearch) {
+                continue
             }
 
-            val firstLineSearch = searchLines.first().trim()
-            val lastLineSearch = searchLines.last().trim()
-            val candidates = mutableListOf<Pair<Int, Int>>()
-
-            for (start in originalLines.indices) {
-                if (originalLines[start].trim() != firstLineSearch) {
-                    continue
+            for (end in start + 2 until originalLines.size) {
+                if (originalLines[end].trim() == lastLineSearch) {
+                    candidates += start to end
+                    break
                 }
-
-                for (end in start + 2 until originalLines.size) {
-                    if (originalLines[end].trim() == lastLineSearch) {
-                        candidates += start to end
-                        break
-                    }
-                }
-            }
-
-            if (candidates.isEmpty()) {
-                return@sequence
-            }
-
-            if (candidates.size == 1) {
-                val (start, end) = candidates.single()
-                val actualBlockSize = end - start + 1
-                val similarity =
-                    similarity(
-                        originalLines = originalLines,
-                        searchLines = searchLines,
-                        startLine = start,
-                        actualBlockSize = actualBlockSize,
-                    )
-
-                if (similarity >= 0.0) {
-                    val matchStartIndex = prefixLength(originalLines, start)
-                    val matchEndIndex = blockEndIndex(originalLines, start, actualBlockSize)
-                    yield(content.substring(matchStartIndex, matchEndIndex))
-                }
-                return@sequence
-            }
-
-            var bestMatch: Pair<Int, Int>? = null
-            var maxSimilarity = -1.0
-            for ((start, end) in candidates) {
-                val actualBlockSize = end - start + 1
-                val similarity = similarity(originalLines, searchLines, start, actualBlockSize)
-                if (similarity > maxSimilarity) {
-                    maxSimilarity = similarity
-                    bestMatch = start to end
-                }
-            }
-
-            if (maxSimilarity >= 0.3 && bestMatch != null) {
-                val (start, end) = bestMatch
-                val matchStartIndex = prefixLength(originalLines, start)
-                val matchEndIndex = blockEndIndex(originalLines, start, end - start + 1)
-                yield(content.substring(matchStartIndex, matchEndIndex))
             }
         }
+
+        if (candidates.isEmpty()) {
+            return@sequence
+        }
+
+        if (candidates.size == 1) {
+            val (start, end) = candidates.single()
+            val actualBlockSize = end - start + 1
+            val similarity =
+                similarity(
+                    originalLines = originalLines,
+                    searchLines = searchLines,
+                    startLine = start,
+                    actualBlockSize = actualBlockSize,
+                )
+
+            if (similarity >= 0.0) {
+                val matchStartIndex = prefixLength(originalLines, start)
+                val matchEndIndex = blockEndIndex(originalLines, start, actualBlockSize)
+                yield(content.substring(matchStartIndex, matchEndIndex))
+            }
+            return@sequence
+        }
+
+        var bestMatch: Pair<Int, Int>? = null
+        var maxSimilarity = -1.0
+        for ((start, end) in candidates) {
+            val actualBlockSize = end - start + 1
+            val similarity = similarity(originalLines, searchLines, start, actualBlockSize)
+            if (similarity > maxSimilarity) {
+                maxSimilarity = similarity
+                bestMatch = start to end
+            }
+        }
+
+        if (maxSimilarity >= 0.3 && bestMatch != null) {
+            val (start, end) = bestMatch
+            val matchStartIndex = prefixLength(originalLines, start)
+            val matchEndIndex = blockEndIndex(originalLines, start, end - start + 1)
+            yield(content.substring(matchStartIndex, matchEndIndex))
+        }
+    }
 
     private fun whitespaceNormalizedReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            fun normalizeWhitespace(text: String) = text.replace(Regex("\\s+"), " ").trim()
+    ): Sequence<String> = sequence {
+        fun normalizeWhitespace(text: String) = text.replace(Regex("\\s+"), " ").trim()
 
-            val normalizedFind = normalizeWhitespace(find)
-            val lines = content.split("\n")
-            for (line in lines) {
-                if (normalizeWhitespace(line) == normalizedFind) {
-                    yield(line)
-                    continue
-                }
-
-                val normalizedLine = normalizeWhitespace(line)
-                if (!normalizedLine.contains(normalizedFind)) {
-                    continue
-                }
-
-                val words = find.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-                if (words.isEmpty()) {
-                    continue
-                }
-
-                val pattern = words.joinToString("\\s+") { Regex.escape(it) }
-                val match = Regex(pattern).find(line)
-                if (match != null) {
-                    yield(match.value)
-                }
+        val normalizedFind = normalizeWhitespace(find)
+        val lines = content.split("\n")
+        for (line in lines) {
+            if (normalizeWhitespace(line) == normalizedFind) {
+                yield(line)
+                continue
             }
 
-            val findLines = find.split("\n")
-            if (findLines.size <= 1) {
-                return@sequence
+            val normalizedLine = normalizeWhitespace(line)
+            if (!normalizedLine.contains(normalizedFind)) {
+                continue
             }
 
-            for (start in 0..lines.size - findLines.size) {
-                val block = lines.subList(start, start + findLines.size).joinToString("\n")
-                if (normalizeWhitespace(block) == normalizedFind) {
-                    yield(block)
-                }
+            val words = find.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            if (words.isEmpty()) {
+                continue
+            }
+
+            val pattern = words.joinToString("\\s+") { Regex.escape(it) }
+            val match = Regex(pattern).find(line)
+            if (match != null) {
+                yield(match.value)
             }
         }
+
+        val findLines = find.split("\n")
+        if (findLines.size <= 1) {
+            return@sequence
+        }
+
+        for (start in 0..lines.size - findLines.size) {
+            val block = lines.subList(start, start + findLines.size).joinToString("\n")
+            if (normalizeWhitespace(block) == normalizedFind) {
+                yield(block)
+            }
+        }
+    }
 
     private fun indentationFlexibleReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            fun removeIndentation(text: String): String {
-                val lines = text.split("\n")
-                val nonEmptyLines = lines.filter { it.trim().isNotEmpty() }
-                if (nonEmptyLines.isEmpty()) {
-                    return text
-                }
-
-                val minIndent = nonEmptyLines.minOf { line -> line.takeWhile { it.isWhitespace() }.length }
-                return lines.joinToString("\n") { line ->
-                    if (line.trim().isEmpty()) {
-                        line
-                    } else {
-                        line.drop(minIndent)
-                    }
-                }
+    ): Sequence<String> = sequence {
+        fun removeIndentation(text: String): String {
+            val lines = text.split("\n")
+            val nonEmptyLines = lines.filter { it.trim().isNotEmpty() }
+            if (nonEmptyLines.isEmpty()) {
+                return text
             }
 
-            val normalizedFind = removeIndentation(find)
-            val contentLines = content.split("\n")
-            val findLines = find.split("\n")
-            if (findLines.isEmpty() || contentLines.size < findLines.size) {
-                return@sequence
-            }
-
-            for (start in 0..contentLines.size - findLines.size) {
-                val block = contentLines.subList(start, start + findLines.size).joinToString("\n")
-                if (removeIndentation(block) == normalizedFind) {
-                    yield(block)
+            val minIndent = nonEmptyLines.minOf { line -> line.takeWhile { it.isWhitespace() }.length }
+            return lines.joinToString("\n") { line ->
+                if (line.trim().isEmpty()) {
+                    line
+                } else {
+                    line.drop(minIndent)
                 }
             }
         }
+
+        val normalizedFind = removeIndentation(find)
+        val contentLines = content.split("\n")
+        val findLines = find.split("\n")
+        if (findLines.isEmpty() || contentLines.size < findLines.size) {
+            return@sequence
+        }
+
+        for (start in 0..contentLines.size - findLines.size) {
+            val block = contentLines.subList(start, start + findLines.size).joinToString("\n")
+            if (removeIndentation(block) == normalizedFind) {
+                yield(block)
+            }
+        }
+    }
 
     private fun escapeNormalizedReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            fun unescapeString(text: String): String =
-                text.replace(Regex("\\\\(n|t|r|'|\"|`|\\\\|\\n|\\$)")) { match ->
-                    when (match.groupValues[1]) {
-                        "n" -> "\n"
-                        "t" -> "\t"
-                        "r" -> "\r"
-                        "'" -> "'"
-                        "\"" -> "\""
-                        "`" -> "`"
-                        "\\" -> "\\"
-                        "\n" -> "\n"
-                        "$" -> "$"
-                        else -> match.value
-                    }
+    ): Sequence<String> = sequence {
+        fun unescapeString(text: String): String =
+            text.replace(Regex("\\\\(n|t|r|'|\"|`|\\\\|\\n|\\$)")) { match ->
+                when (match.groupValues[1]) {
+                    "n" -> "\n"
+                    "t" -> "\t"
+                    "r" -> "\r"
+                    "'" -> "'"
+                    "\"" -> "\""
+                    "`" -> "`"
+                    "\\" -> "\\"
+                    "\n" -> "\n"
+                    "$" -> "$"
+                    else -> match.value
                 }
-
-            val unescapedFind = unescapeString(find)
-            if (content.contains(unescapedFind)) {
-                yield(unescapedFind)
             }
 
-            val lines = content.split("\n")
-            val findLines = unescapedFind.split("\n")
-            for (start in 0..lines.size - findLines.size) {
-                val block = lines.subList(start, start + findLines.size).joinToString("\n")
-                if (unescapeString(block) == unescapedFind) {
-                    yield(block)
-                }
+        val unescapedFind = unescapeString(find)
+        if (content.contains(unescapedFind)) {
+            yield(unescapedFind)
+        }
+
+        val lines = content.split("\n")
+        val findLines = unescapedFind.split("\n")
+        for (start in 0..lines.size - findLines.size) {
+            val block = lines.subList(start, start + findLines.size).joinToString("\n")
+            if (unescapeString(block) == unescapedFind) {
+                yield(block)
             }
         }
+    }
 
     private fun multiOccurrenceReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            var startIndex = 0
-            while (true) {
-                val index = content.indexOf(find, startIndex)
-                if (index == -1) {
-                    break
-                }
-
-                yield(find)
-                startIndex = index + find.length
+    ): Sequence<String> = sequence {
+        var startIndex = 0
+        while (true) {
+            val index = content.indexOf(find, startIndex)
+            if (index == -1) {
+                break
             }
+
+            yield(find)
+            startIndex = index + find.length
         }
+    }
 
     private fun trimmedBoundaryReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            val trimmedFind = find.trim()
-            if (trimmedFind == find) {
-                return@sequence
-            }
+    ): Sequence<String> = sequence {
+        val trimmedFind = find.trim()
+        if (trimmedFind == find) {
+            return@sequence
+        }
 
-            if (content.contains(trimmedFind)) {
-                yield(trimmedFind)
-            }
+        if (content.contains(trimmedFind)) {
+            yield(trimmedFind)
+        }
 
-            val lines = content.split("\n")
-            val findLines = find.split("\n")
-            for (start in 0..lines.size - findLines.size) {
-                val block = lines.subList(start, start + findLines.size).joinToString("\n")
-                if (block.trim() == trimmedFind) {
-                    yield(block)
-                }
+        val lines = content.split("\n")
+        val findLines = find.split("\n")
+        for (start in 0..lines.size - findLines.size) {
+            val block = lines.subList(start, start + findLines.size).joinToString("\n")
+            if (block.trim() == trimmedFind) {
+                yield(block)
             }
         }
+    }
 
     private fun contextAwareReplacer(
         content: String,
         find: String,
-    ): Sequence<String> =
-        sequence {
-            val findLines = find.split("\n").toMutableList()
-            if (findLines.size < 3) {
-                return@sequence
-            }
-            if (findLines.lastOrNull().isNullOrEmpty()) {
-                findLines.removeLast()
+    ): Sequence<String> = sequence {
+        val findLines = find.split("\n").toMutableList()
+        if (findLines.size < 3) {
+            return@sequence
+        }
+        if (findLines.lastOrNull().isNullOrEmpty()) {
+            findLines.removeLast()
+        }
+
+        val contentLines = content.split("\n")
+        val firstLine = findLines.first().trim()
+        val lastLine = findLines.last().trim()
+        for (start in contentLines.indices) {
+            if (contentLines[start].trim() != firstLine) {
+                continue
             }
 
-            val contentLines = content.split("\n")
-            val firstLine = findLines.first().trim()
-            val lastLine = findLines.last().trim()
-            for (start in contentLines.indices) {
-                if (contentLines[start].trim() != firstLine) {
+            for (end in start + 2 until contentLines.size) {
+                if (contentLines[end].trim() != lastLine) {
                     continue
                 }
 
-                for (end in start + 2 until contentLines.size) {
-                    if (contentLines[end].trim() != lastLine) {
-                        continue
-                    }
-
-                    val blockLines = contentLines.subList(start, end + 1)
-                    if (blockLines.size == findLines.size && contextSimilarity(blockLines, findLines) >= 0.5) {
-                        yield(blockLines.joinToString("\n"))
-                        break
-                    }
+                val blockLines = contentLines.subList(start, end + 1)
+                if (blockLines.size == findLines.size && contextSimilarity(blockLines, findLines) >= 0.5) {
+                    yield(blockLines.joinToString("\n"))
                     break
                 }
+                break
             }
         }
+    }
 
     private fun similarity(
         originalLines: List<String>,

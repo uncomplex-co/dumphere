@@ -1,10 +1,10 @@
 package dev.uncomplex.dumphere.ports
 
 import dev.uncomplex.dumphere.application.HtmlPageEntity
-import org.springframework.data.jdbc.repository.query.Query
-import org.springframework.data.jdbc.repository.query.Modifying
-import org.springframework.data.repository.CrudRepository
 import java.time.Instant
+import org.springframework.data.jdbc.repository.query.Modifying
+import org.springframework.data.jdbc.repository.query.Query
+import org.springframework.data.repository.CrudRepository
 
 interface HtmlPageRepository : CrudRepository<HtmlPageEntity, String> {
     @Modifying
@@ -20,19 +20,18 @@ interface HtmlPageRepository : CrudRepository<HtmlPageEntity, String> {
             :#{#page.currentVersion}, :#{#page.currentBytes}, :#{#page.isLive},
             cast(:#{#page.publicUntil?.toString()} as timestamptz)
         )
-        """,
+        """
     )
     fun insert(page: HtmlPageEntity): Int
 
-    @Query("select custom_metadata::text from html_pages where id = :id")
-    fun readCustomMetadata(id: String): String?
+    @Query("select custom_metadata::text from html_pages where id = :id") fun readCustomMetadata(id: String): String?
 
     @Modifying
     @Query(
         """
         update html_pages set custom_metadata = cast(:metadata as jsonb), updated_at = :now, updated_by_user_id = :userId
         where id = :id
-        """,
+        """
     )
     fun updateCustomMetadata(id: String, metadata: String, now: Instant, userId: Long?): Int
 
@@ -40,12 +39,11 @@ interface HtmlPageRepository : CrudRepository<HtmlPageEntity, String> {
         """
         update html_pages set last_discussion_thread_number = last_discussion_thread_number + 1
         where id = :id returning last_discussion_thread_number
-        """,
+        """
     )
     fun allocateDiscussionThreadNumber(id: String): Long?
 
-    @Query("select * from html_pages where id = :id for update")
-    fun findByIdForUpdate(id: String): HtmlPageEntity?
+    @Query("select * from html_pages where id = :id for update") fun findByIdForUpdate(id: String): HtmlPageEntity?
 
     @Query(
         """
@@ -53,7 +51,7 @@ interface HtmlPageRepository : CrudRepository<HtmlPageEntity, String> {
         join users u on u.id = p.created_by_user_id
         where u.subject = :subject and p.id <> :excludeId
         order by p.created_at desc, p.id desc
-        """,
+        """
     )
     fun findOtherArtifactsByCreator(
         subject: String,

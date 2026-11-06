@@ -1,6 +1,21 @@
 package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
+import java.net.CookieManager
+import java.net.URI
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.security.MessageDigest
+import java.time.Instant
+import java.util.Base64
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
@@ -29,29 +44,15 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import tools.jackson.databind.ObjectMapper
-import java.net.CookieManager
-import java.net.URI
-import java.net.URLDecoder
-import java.net.URLEncoder
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.security.MessageDigest
-import java.time.Instant
-import java.util.Base64
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = [
-        "spring.security.oauth2.client.registration.google.client-id=test-client",
-        "spring.security.oauth2.client.registration.google.client-secret=test-secret",
-        "htmlshare.allowed-email-domain=example.com",
-    ],
+    properties =
+        [
+            "spring.security.oauth2.client.registration.google.client-id=test-client",
+            "spring.security.oauth2.client.registration.google.client-secret=test-secret",
+            "htmlshare.allowed-email-domain=example.com",
+        ],
 )
 @Import(McpLoginIntegrationTests.GoogleBoundary::class)
 class McpLoginIntegrationTests {
@@ -75,8 +76,7 @@ class McpLoginIntegrationTests {
     fun loggedOutMcpAuthorizationResumesAtConsentAfterGoogleCallback() {
         val clientId = UUID.randomUUID().toString()
         clients.save(
-            RegisteredClient
-                .withId(clientId)
+            RegisteredClient.withId(clientId)
                 .clientId(clientId)
                 .clientName("Regression MCP client")
                 .clientSecret(requireNotNull(passwords.encode("test-secret")))
@@ -88,12 +88,9 @@ class McpLoginIntegrationTests {
                 .scope("email")
                 .scope("profile")
                 .clientSettings(
-                    ClientSettings
-                        .builder()
-                        .requireProofKey(true)
-                        .requireAuthorizationConsent(true)
-                        .build(),
-                ).build(),
+                    ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(true).build()
+                )
+                .build()
         )
         val browser = HttpClient.newBuilder().cookieHandler(CookieManager()).build()
 
@@ -110,8 +107,7 @@ class McpLoginIntegrationTests {
 
         val verifier = "test-verifier-" + "a".repeat(43)
         val challenge =
-            Base64
-                .getUrlEncoder()
+            Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()))
         val target =
@@ -128,49 +124,65 @@ class McpLoginIntegrationTests {
         val googleRedirect = location(get(googleLink))
         get("/favicon.ico")
         val googleState =
-            URI
-                .create(googleRedirect)
+            URI.create(googleRedirect)
                 .rawQuery
                 .split("&")
                 .first { it.startsWith("state=") }
                 .substringAfter("=")
                 .let { URLDecoder.decode(it, Charsets.UTF_8) }
-        val afterLogin = location(get("/login/oauth2/code/google?code=test-code&state=${URLEncoder.encode(googleState, Charsets.UTF_8)}"))
+        val afterLogin =
+            location(
+                get("/login/oauth2/code/google?code=test-code&state=${URLEncoder.encode(googleState, Charsets.UTF_8)}")
+            )
         assertEquals(target, URI.create(afterLogin).let { it.rawPath + "?" + it.rawQuery })
         val consentUrl = location(get(afterLogin))
-        assertEquals("/oauth2/consent?state=mcp-state", URI.create(consentUrl).let { it.rawPath + "?" + it.rawQuery })
+        assertEquals(
+            "/oauth2/consent?state=mcp-state",
+            URI.create(consentUrl).let { it.rawPath + "?" + it.rawQuery },
+        )
         val consent = get(consentUrl)
         assertEquals(200, consent.statusCode(), consent.body())
         assertContains(consent.body(), "Approve MCP access")
         assertContains(consent.body(), "Regression MCP client")
-        assertEquals(0, jdbc.queryForObject("select count(*) from mcp_refresh_tokens where client_id = ?", Int::class.java, clientId))
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from mcp_refresh_tokens where client_id = ?",
+                Int::class.java,
+                clientId,
+            ),
+        )
 
         fun post(
             path: String,
             form: Map<String, String>,
         ): HttpResponse<String> =
             browser.send(
-                HttpRequest
-                    .newBuilder(URI.create("http://localhost:$port").resolve(path))
+                HttpRequest.newBuilder(URI.create("http://localhost:$port").resolve(path))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(
                         HttpRequest.BodyPublishers.ofString(
                             form.entries.joinToString("&") { (key, value) ->
                                 "${URLEncoder.encode(key, Charsets.UTF_8)}=${URLEncoder.encode(value, Charsets.UTF_8)}"
-                            },
-                        ),
-                    ).build(),
+                            }
+                        )
+                    )
+                    .build(),
                 HttpResponse.BodyHandlers.ofString(),
             )
         val csrf = Regex("name=\"_csrf\" value=\"([^\"]+)\"").find(consent.body())!!.groupValues[1]
-        val callback = location(post("/oauth2/consent", mapOf("state" to "mcp-state", "decision" to "approve", "_csrf" to csrf)))
-        val code =
-            URI
-                .create(callback)
-                .rawQuery
-                .split("&")
-                .first { it.startsWith("code=") }
-                .substringAfter("=")
+        val callback =
+            location(
+                post(
+                    "/oauth2/consent",
+                    mapOf(
+                        "state" to "mcp-state",
+                        "decision" to "approve",
+                        "_csrf" to csrf,
+                    ),
+                )
+            )
+        val code = URI.create(callback).rawQuery.split("&").first { it.startsWith("code=") }.substringAfter("=")
         val issued =
             post(
                 "/oauth2/token",
@@ -188,13 +200,16 @@ class McpLoginIntegrationTests {
         assertEquals(3600L, issuedBody.path("expires_in").asLong())
         val refreshToken = issuedBody.path("refresh_token").asString()
         val hash =
-            Base64
-                .getUrlEncoder()
+            Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(MessageDigest.getInstance("SHA-256").digest(refreshToken.toByteArray()))
         assertEquals(
             listOf(hash),
-            jdbc.queryForList("select token_hash from mcp_refresh_tokens where client_id = ?", String::class.java, clientId),
+            jdbc.queryForList(
+                "select token_hash from mcp_refresh_tokens where client_id = ?",
+                String::class.java,
+                clientId,
+            ),
         )
         val refreshForm =
             mapOf(
@@ -206,14 +221,29 @@ class McpLoginIntegrationTests {
         val refreshed = post("/oauth2/token", refreshForm)
         assertEquals(200, refreshed.statusCode(), refreshed.body())
         assertEquals(3600L, json.readTree(refreshed.body()).path("expires_in").asLong())
-        assertEquals(0, jdbc.queryForObject("select count(*) from mcp_refresh_tokens where token_hash = ?", Int::class.java, hash))
-        assertEquals(1, jdbc.queryForObject("select count(*) from mcp_refresh_tokens where client_id = ?", Int::class.java, clientId))
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from mcp_refresh_tokens where token_hash = ?",
+                Int::class.java,
+                hash,
+            ),
+        )
+        assertEquals(
+            1,
+            jdbc.queryForObject(
+                "select count(*) from mcp_refresh_tokens where client_id = ?",
+                Int::class.java,
+                clientId,
+            ),
+        )
         val replay = post("/oauth2/token", refreshForm)
         assertEquals(400, replay.statusCode())
         assertEquals("invalid_grant", json.readTree(replay.body()).path("error").asString())
     }
 
-    // Replace only Google's external token and identity boundary; use the real login filters and JDBC sessions.
+    // Replace only Google's external token and identity boundary; use the real login filters and
+    // JDBC sessions.
     @TestConfiguration(proxyBeanMethods = false)
     class GoogleBoundary {
         private val tokens = ConcurrentHashMap<String, Jwt>()
@@ -224,8 +254,7 @@ class McpLoginIntegrationTests {
                 val token = UUID.randomUUID().toString()
                 val now = Instant.now()
                 tokens[token] =
-                    Jwt
-                        .withTokenValue(token)
+                    Jwt.withTokenValue(token)
                         .header("alg", "RS256")
                         .subject("login-regression-user")
                         .issuer("https://accounts.google.com")
@@ -234,10 +263,14 @@ class McpLoginIntegrationTests {
                         .expiresAt(now.plusSeconds(300))
                         .claim("email", "login-regression@example.com")
                         .claim("name", "Login regression")
-                        .claim("nonce", requireNotNull(grant.authorizationExchange.authorizationRequest.additionalParameters["nonce"]))
+                        .claim(
+                            "nonce",
+                            requireNotNull(
+                                grant.authorizationExchange.authorizationRequest.additionalParameters["nonce"]
+                            ),
+                        )
                         .build()
-                OAuth2AccessTokenResponse
-                    .withToken("test-access-token")
+                OAuth2AccessTokenResponse.withToken("test-access-token")
                     .tokenType(OAuth2AccessToken.TokenType.BEARER)
                     .expiresIn(300)
                     .additionalParameters(mapOf("id_token" to token))
@@ -245,11 +278,13 @@ class McpLoginIntegrationTests {
             }
 
         @Bean
-        fun googleJwtDecoder(): JwtDecoderFactory<ClientRegistration> =
-            JwtDecoderFactory { JwtDecoder { token -> requireNotNull(tokens[token]) } }
+        fun googleJwtDecoder(): JwtDecoderFactory<ClientRegistration> = JwtDecoderFactory {
+            JwtDecoder { token -> requireNotNull(tokens[token]) }
+        }
 
         @Bean
-        fun googleUserInfo(): OAuth2UserService<OidcUserRequest, OidcUser> =
-            OAuth2UserService { request -> DefaultOidcUser(emptyList(), request.idToken) }
+        fun googleUserInfo(): OAuth2UserService<OidcUserRequest, OidcUser> = OAuth2UserService { request ->
+            DefaultOidcUser(emptyList(), request.idToken)
+        }
     }
 }

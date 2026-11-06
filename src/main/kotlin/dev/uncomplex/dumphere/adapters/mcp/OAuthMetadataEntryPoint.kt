@@ -6,9 +6,7 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.security.core.AuthenticationException
 import org.springframework.security.web.AuthenticationEntryPoint
 
-class OAuthMetadataEntryPoint(
-    private val properties: SamePageAppProperties,
-) : AuthenticationEntryPoint {
+class OAuthMetadataEntryPoint(private val properties: SamePageAppProperties) : AuthenticationEntryPoint {
     override fun commence(
         request: HttpServletRequest,
         response: HttpServletResponse,

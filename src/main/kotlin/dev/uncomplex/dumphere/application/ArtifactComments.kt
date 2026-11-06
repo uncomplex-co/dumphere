@@ -1,14 +1,14 @@
 package dev.uncomplex.dumphere.application
 
-import dev.uncomplex.dumphere.ports.CommentRepository
 import dev.uncomplex.dumphere.ports.CommentRecord
+import dev.uncomplex.dumphere.ports.CommentRepository
 import dev.uncomplex.dumphere.ports.CommentThreadRecord
 import dev.uncomplex.dumphere.ports.CommentThreadRepository
 import dev.uncomplex.dumphere.ports.HtmlPageRepository
-import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 data class ArtifactComment(
     val id: Long,
@@ -62,42 +62,48 @@ class ArtifactComments(
     fun listThread(artifactId: String, threadId: Long): List<ArtifactComment> =
         withReactions(artifactId, comments.findThreadComments(artifactId, threadId), null)
 
-    private fun withReactions(artifactId: String, records: List<CommentRecord>, subject: String?): List<ArtifactComment> {
+    private fun withReactions(
+        artifactId: String,
+        records: List<CommentRecord>,
+        subject: String?,
+    ): List<ArtifactComment> {
         val current = reactions.list(artifactId, subject)
         return records.map { it.toResponse(current[it.id].orEmpty()) }
     }
 
-    private fun CommentRecord.toResponse(reactions: List<CommentReaction>) = ArtifactComment(
-        id = id,
-        threadId = threadId,
-        threadNumber = threadNumber,
-        body = body,
-        author = author,
-        createdAt = createdAt,
-        xpath = xpath,
-        relativeX = relativeX,
-        relativeY = relativeY,
-        editedAt = editedAt,
-        canEdit = canEdit,
-        resolvedAt = resolvedAt,
-        reactions = reactions,
-    )
+    private fun CommentRecord.toResponse(reactions: List<CommentReaction>) =
+        ArtifactComment(
+            id = id,
+            threadId = threadId,
+            threadNumber = threadNumber,
+            body = body,
+            author = author,
+            createdAt = createdAt,
+            xpath = xpath,
+            relativeX = relativeX,
+            relativeY = relativeY,
+            editedAt = editedAt,
+            canEdit = canEdit,
+            resolvedAt = resolvedAt,
+            reactions = reactions,
+        )
 
-    private fun CommentThreadRecord.toResponse(reactions: List<CommentReaction>) = ArtifactCommentThread(
-        threadId = threadId,
-        threadNumber = threadNumber,
-        firstCommentId = firstCommentId,
-        firstComment = firstComment,
-        author = author,
-        createdAt = createdAt,
-        lastActivityAt = lastActivityAt,
-        replyCount = replyCount,
-        xpath = xpath,
-        relativeX = relativeX,
-        relativeY = relativeY,
-        resolvedAt = resolvedAt,
-        reactions = reactions,
-    )
+    private fun CommentThreadRecord.toResponse(reactions: List<CommentReaction>) =
+        ArtifactCommentThread(
+            threadId = threadId,
+            threadNumber = threadNumber,
+            firstCommentId = firstCommentId,
+            firstComment = firstComment,
+            author = author,
+            createdAt = createdAt,
+            lastActivityAt = lastActivityAt,
+            replyCount = replyCount,
+            xpath = xpath,
+            relativeX = relativeX,
+            relativeY = relativeY,
+            resolvedAt = resolvedAt,
+            reactions = reactions,
+        )
 
     @Transactional
     fun add(
@@ -122,7 +128,7 @@ class ArtifactComments(
                     xpath = xpath,
                     relativeX = relativeX,
                     relativeY = relativeY,
-                ),
+                )
             )
         return saveComment(thread, versionId, body, user, now)
     }
@@ -134,36 +140,47 @@ class ArtifactComments(
         body: String,
         author: UserEntity?,
     ): ArtifactComment {
-        val current = requireNotNull(threads.findByIdForUpdate(requireNotNull(thread.id))?.takeIf { it.deletedAt == null }) {
-            "Thread not found"
-        }
+        val current =
+            requireNotNull(threads.findByIdForUpdate(requireNotNull(thread.id))?.takeIf { it.deletedAt == null }) {
+                "Thread not found"
+            }
         return saveComment(current, versionId, body, author, Instant.now())
     }
 
     @Transactional
     fun edit(artifactId: String, commentId: Long, body: String, author: UserEntity): EditCommentResult {
         val existing = comments.findById(commentId).orElse(null) ?: return EditCommentResult.NotFound
-        val thread = threads.findByIdForUpdate(existing.threadId)
-            ?.takeIf { it.artifactId == artifactId && it.deletedAt == null } ?: return EditCommentResult.NotFound
-        val comment = comments.findById(commentId).orElse(null)?.takeIf { it.deletedAt == null }
-            ?: return EditCommentResult.NotFound
+        val thread =
+            threads.findByIdForUpdate(existing.threadId)?.takeIf { it.artifactId == artifactId && it.deletedAt == null }
+                ?: return EditCommentResult.NotFound
+        val comment =
+            comments.findById(commentId).orElse(null)?.takeIf { it.deletedAt == null }
+                ?: return EditCommentResult.NotFound
         val userId = author.id
         if (comment.authorUserId == null || comment.authorUserId != userId) return EditCommentResult.Forbidden
 
         comment.body = body
         comment.editedAt = Instant.now()
         comments.save(comment)
-        return EditCommentResult.Updated(withReactions(artifactId, comments.findThreadComments(artifactId, requireNotNull(thread.id), author.subject), author.subject)
-            .single { it.id == commentId })
+        return EditCommentResult.Updated(
+            withReactions(
+                    artifactId,
+                    comments.findThreadComments(artifactId, requireNotNull(thread.id), author.subject),
+                    author.subject,
+                )
+                .single { it.id == commentId }
+        )
     }
 
     @Transactional
     fun delete(artifactId: String, commentId: Long, author: UserEntity): DeleteCommentResult {
         val existing = comments.findById(commentId).orElse(null) ?: return DeleteCommentResult.NOT_FOUND
-        val thread = threads.findByIdForUpdate(existing.threadId)
-            ?.takeIf { it.artifactId == artifactId && it.deletedAt == null } ?: return DeleteCommentResult.NOT_FOUND
-        val comment = comments.findById(commentId).orElse(null)?.takeIf { it.deletedAt == null }
-            ?: return DeleteCommentResult.NOT_FOUND
+        val thread =
+            threads.findByIdForUpdate(existing.threadId)?.takeIf { it.artifactId == artifactId && it.deletedAt == null }
+                ?: return DeleteCommentResult.NOT_FOUND
+        val comment =
+            comments.findById(commentId).orElse(null)?.takeIf { it.deletedAt == null }
+                ?: return DeleteCommentResult.NOT_FOUND
         val userId = author.id
         if (comment.authorUserId == null || comment.authorUserId != userId) return DeleteCommentResult.FORBIDDEN
 
@@ -181,8 +198,9 @@ class ArtifactComments(
 
     @Transactional
     fun setResolved(artifactId: String, threadId: Long, resolved: Boolean, author: UserEntity): DiscussionThreadState? {
-        val thread = threads.findByIdForUpdate(threadId)
-            ?.takeIf { it.artifactId == artifactId && it.deletedAt == null } ?: return null
+        val thread =
+            threads.findByIdForUpdate(threadId)?.takeIf { it.artifactId == artifactId && it.deletedAt == null }
+                ?: return null
         if ((thread.resolvedAt != null) == resolved) {
             return DiscussionThreadState(threadId, thread.number, thread.resolvedAt)
         }
@@ -207,7 +225,7 @@ class ArtifactComments(
                     authorUserId = user?.id,
                     body = body,
                     createdAt = now,
-                ),
+                )
             )
         return ArtifactComment(
             id = requireNotNull(comment.id),
@@ -227,8 +245,14 @@ class ArtifactComments(
 
 sealed interface EditCommentResult {
     data class Updated(val comment: ArtifactComment) : EditCommentResult
+
     data object NotFound : EditCommentResult
+
     data object Forbidden : EditCommentResult
 }
 
-enum class DeleteCommentResult { DELETED, NOT_FOUND, FORBIDDEN }
+enum class DeleteCommentResult {
+    DELETED,
+    NOT_FOUND,
+    FORBIDDEN,
+}

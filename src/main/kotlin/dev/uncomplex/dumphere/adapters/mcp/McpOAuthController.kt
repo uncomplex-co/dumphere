@@ -12,9 +12,7 @@ import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-class McpOAuthController(
-    private val mcpOAuthService: McpOAuthService,
-) {
+class McpOAuthController(private val mcpOAuthService: McpOAuthService) {
     @GetMapping("/oauth2/authorize")
     fun authorize(
         @RequestParam("response_type", required = false) responseType: String?,
@@ -38,7 +36,10 @@ class McpOAuthController(
                     codeChallengeMethod = codeChallengeMethod,
                     scope = scope,
                 )
-            request.session.setAttribute(McpAuthorizationRequest.sessionKey(authorizationRequest.state), authorizationRequest)
+            request.session.setAttribute(
+                McpAuthorizationRequest.sessionKey(authorizationRequest.state),
+                authorizationRequest,
+            )
             response.sendRedirect("/oauth2/consent?state=${authorizationRequest.state}")
         } catch (error: OAuthRequestException) {
             if (error.redirectUri != null && !state.isNullOrBlank() && !clientId.isNullOrBlank()) {
@@ -99,7 +100,9 @@ class McpOAuthController(
                 }
             } catch (error: OAuthTokenException) {
                 val response = mcpOAuthService.tokenErrorResponse(error)
-                return ResponseEntity.status(response.statusCode).headers(response.headers).body(response.body ?: emptyMap())
+                return ResponseEntity.status(response.statusCode)
+                    .headers(response.headers)
+                    .body(response.body ?: emptyMap())
             }
 
         return ResponseEntity.ok(
@@ -108,7 +111,7 @@ class McpOAuthController(
                 "token_type" to "Bearer",
                 "expires_in" to token.expiresIn,
                 "refresh_token" to token.refreshToken,
-            ),
+            )
         )
     }
 }

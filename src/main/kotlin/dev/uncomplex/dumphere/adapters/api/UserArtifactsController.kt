@@ -2,6 +2,7 @@ package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.authenticatedUser
 import dev.uncomplex.dumphere.ports.HtmlPageRepository
+import java.time.Instant
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -10,12 +11,9 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
-import java.time.Instant
 
 @RestController
-class UserArtifactsController(
-    private val pages: HtmlPageRepository,
-) {
+class UserArtifactsController(private val pages: HtmlPageRepository) {
     @GetMapping("/account/artifacts")
     fun list(
         @RequestParam(defaultValue = "") excludeId: String,

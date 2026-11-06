@@ -2,22 +2,24 @@ package dev.uncomplex.dumphere.adapters.api
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpSession
-import org.springframework.web.util.UriComponentsBuilder
 import java.net.URI
 import java.util.UUID
+import org.springframework.web.util.UriComponentsBuilder
 
 object RedirectUrlSupport {
     private const val REDIRECT_URL_PARAMETER = "redirectUrl"
     private const val SESSION_PREFIX = "oauth2.redirect-url."
 
-    fun currentRequestUrl(request: HttpServletRequest): String = request.requestURI + request.queryString?.let { "?$it" }.orEmpty()
+    fun currentRequestUrl(request: HttpServletRequest): String =
+        request.requestURI + request.queryString?.let { "?$it" }.orEmpty()
 
     fun sanitize(redirectUrl: String?): String? {
         val candidate = redirectUrl?.trim().orEmpty()
         if (candidate.isEmpty()) return null
 
         val uri = runCatching { URI(candidate) }.getOrNull() ?: return null
-        if (uri.isAbsolute || uri.host != null || uri.rawPath.isNullOrBlank() || !uri.rawPath.startsWith("/")) return null
+        if (uri.isAbsolute || uri.host != null || uri.rawPath.isNullOrBlank() || !uri.rawPath.startsWith("/"))
+            return null
 
         return candidate
     }
@@ -54,8 +56,7 @@ object RedirectUrlSupport {
         redirectUrl: String?,
     ): String {
         val sanitizedRedirectUrl = sanitize(redirectUrl) ?: return path
-        return UriComponentsBuilder
-            .fromPath(path)
+        return UriComponentsBuilder.fromPath(path)
             .queryParam(REDIRECT_URL_PARAMETER, "{redirectUrl}")
             .encode()
             .buildAndExpand(sanitizedRedirectUrl)

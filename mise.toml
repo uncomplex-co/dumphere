@@ -5,6 +5,10 @@ java = "temurin-25"
 [tasks]
 start = "./gradlew bootRun --rerun-tasks --args='--spring.profiles.active=local_dev'"
 
+[tasks.lint]
+description = "Apply ktfmt formatting and run Detekt with auto-correction"
+run = "./gradlew spotlessApply detekt --auto-correct"
+
 [tasks.secrets]
 description = "Scan tracked and non-ignored untracked files for secrets"
 run = "bash -o pipefail -c 'git ls-files --cached --others --exclude-standard -z | xargs -0 -r betterleaks dir --redact=100 --validation=false --verbose --timeout=120 --'"

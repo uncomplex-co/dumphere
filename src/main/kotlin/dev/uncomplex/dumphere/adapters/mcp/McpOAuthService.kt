@@ -3,6 +3,16 @@ package dev.uncomplex.dumphere.adapters.mcp
 import dev.uncomplex.dumphere.application.AuthenticatedUser
 import dev.uncomplex.dumphere.application.SamePageAppProperties
 import dev.uncomplex.dumphere.ports.UserRepository
+import java.io.Serializable
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.time.Duration
+import java.time.Instant
+import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.text.Charsets.UTF_8
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -16,16 +26,6 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.io.Serializable
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.time.Duration
-import java.time.Instant
-import java.util.Base64
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.text.Charsets.UTF_8
 
 data class McpAuthorizationRequest(
     val clientId: String,
@@ -88,35 +88,42 @@ class McpOAuthService(
         codeChallengeMethod: String?,
         scope: String?,
     ): McpAuthorizationRequest {
-        val resolvedClientId = clientId?.takeIf { it.isNotBlank() } ?: throw OAuthRequestException("invalid_request", "Missing client_id")
-        val client = clients.findByClientId(resolvedClientId) ?: throw OAuthRequestException("invalid_client", "Unknown client_id")
+        val resolvedClientId =
+            clientId?.takeIf { it.isNotBlank() } ?: throw OAuthRequestException("invalid_request", "Missing client_id")
+        val client =
+            clients.findByClientId(resolvedClientId)
+                ?: throw OAuthRequestException("invalid_client", "Unknown client_id")
         val resolvedRedirectUri =
-            redirectUri?.takeIf { it.isNotBlank() } ?: throw OAuthRequestException("invalid_request", "Missing redirect_uri")
+            redirectUri?.takeIf { it.isNotBlank() }
+                ?: throw OAuthRequestException("invalid_request", "Missing redirect_uri")
 
         if (!client.redirectUris.contains(resolvedRedirectUri)) {
             throw OAuthRequestException("invalid_request", "redirect_uri is not registered", resolvedRedirectUri)
         }
         if (responseType != "code") {
-            throw OAuthRequestException("unsupported_response_type", "Only authorization code flow is supported", resolvedRedirectUri)
+            throw OAuthRequestException(
+                "unsupported_response_type",
+                "Only authorization code flow is supported",
+                resolvedRedirectUri,
+            )
         }
 
         val resolvedState =
-            state?.takeIf { it.isNotBlank() } ?: throw OAuthRequestException("invalid_request", "Missing state", resolvedRedirectUri)
+            state?.takeIf { it.isNotBlank() }
+                ?: throw OAuthRequestException("invalid_request", "Missing state", resolvedRedirectUri)
         val resolvedCodeChallenge =
             codeChallenge?.takeIf { it.isNotBlank() }
                 ?: throw OAuthRequestException("invalid_request", "Missing code_challenge", resolvedRedirectUri)
 
         if (codeChallengeMethod != null && codeChallengeMethod != "S256") {
-            throw OAuthRequestException("invalid_request", "Only S256 code_challenge_method is supported", resolvedRedirectUri)
+            throw OAuthRequestException(
+                "invalid_request",
+                "Only S256 code_challenge_method is supported",
+                resolvedRedirectUri,
+            )
         }
 
-        val requestedScopes =
-            scope
-                .orEmpty()
-                .split(' ')
-                .filter { it.isNotBlank() }
-                .toSet()
-                .ifEmpty { client.scopes }
+        val requestedScopes = scope.orEmpty().split(' ').filter { it.isNotBlank() }.toSet().ifEmpty { client.scopes }
 
         if (!client.scopes.containsAll(requestedScopes)) {
             throw OAuthRequestException("invalid_scope", "Requested scope is not allowed", resolvedRedirectUri)
@@ -158,9 +165,12 @@ class McpOAuthService(
     ): McpTokenResult {
         pruneExpiredGrants()
         val grantCode = code?.takeIf { it.isNotBlank() } ?: throw OAuthTokenException("invalid_request", "Missing code")
-        val stored = grants.remove(grantCode) ?: throw OAuthTokenException("invalid_grant", "Authorization code is invalid or expired")
+        val stored =
+            grants.remove(grantCode)
+                ?: throw OAuthTokenException("invalid_grant", "Authorization code is invalid or expired")
         val resolvedRedirectUri =
-            redirectUri?.takeIf { it.isNotBlank() } ?: throw OAuthTokenException("invalid_request", "Missing redirect_uri")
+            redirectUri?.takeIf { it.isNotBlank() }
+                ?: throw OAuthTokenException("invalid_request", "Missing redirect_uri")
 
         if (stored.request.redirectUri != resolvedRedirectUri) {
             throw OAuthTokenException("invalid_grant", "redirect_uri does not match authorization code")
@@ -171,7 +181,9 @@ class McpOAuthService(
             throw OAuthTokenException("invalid_grant", "Authorization code was not issued to this client")
         }
 
-        val verifier = codeVerifier?.takeIf { it.isNotBlank() } ?: throw OAuthTokenException("invalid_request", "Missing code_verifier")
+        val verifier =
+            codeVerifier?.takeIf { it.isNotBlank() }
+                ?: throw OAuthTokenException("invalid_request", "Missing code_verifier")
         if (verifier.sha256UrlSafe() != stored.request.codeChallenge) {
             throw OAuthTokenException("invalid_grant", "code_verifier does not match code_challenge")
         }
@@ -184,8 +196,7 @@ class McpOAuthService(
             jwtEncoder.encode(
                 JwtEncoderParameters.from(
                     JwsHeader.with(SignatureAlgorithm.RS256).build(),
-                    JwtClaimsSet
-                        .builder()
+                    JwtClaimsSet.builder()
                         .issuer(properties.publicBaseUrl.trimEnd('/'))
                         .subject(user.subject)
                         .audience(listOf("${properties.publicBaseUrl.trimEnd('/')}/mcp"))
@@ -195,8 +206,9 @@ class McpOAuthService(
                         .claims { claims ->
                             user.email?.let { claims["email"] = it }
                             user.displayName?.let { claims["name"] = it }
-                        }.build(),
-                ),
+                        }
+                        .build(),
+                )
             )
 
         val refreshToken = randomToken(32)
@@ -221,19 +233,21 @@ class McpOAuthService(
         clientSecretParam: String?,
     ): McpTokenResult {
         pruneExpiredGrants()
-        val tokenValue = refreshToken?.takeIf { it.isNotBlank() } ?: throw OAuthTokenException("invalid_request", "Missing refresh_token")
+        val tokenValue =
+            refreshToken?.takeIf { it.isNotBlank() }
+                ?: throw OAuthTokenException("invalid_request", "Missing refresh_token")
         val client = authenticateClient(authorizationHeader, clientIdParam, clientSecretParam)
         val now = Instant.now()
         val stored =
             refreshTokens.consume(tokenValue, client.clientId, now)
                 ?: throw OAuthTokenException("invalid_grant", "Refresh token is invalid or expired")
-        val user = users.findById(stored.userId).orElseThrow { OAuthTokenException("invalid_grant", "User no longer exists") }
+        val user =
+            users.findById(stored.userId).orElseThrow { OAuthTokenException("invalid_grant", "User no longer exists") }
         val token =
             jwtEncoder.encode(
                 JwtEncoderParameters.from(
                     JwsHeader.with(SignatureAlgorithm.RS256).build(),
-                    JwtClaimsSet
-                        .builder()
+                    JwtClaimsSet.builder()
                         .issuer(properties.publicBaseUrl.trimEnd('/'))
                         .subject(user.subject)
                         .audience(listOf("${properties.publicBaseUrl.trimEnd('/')}/mcp"))
@@ -243,8 +257,9 @@ class McpOAuthService(
                         .claims { claims ->
                             user.email?.let { claims["email"] = it }
                             user.displayName?.let { claims["name"] = it }
-                        }.build(),
-                ),
+                        }
+                        .build(),
+                )
             )
 
         val newRefreshToken = randomToken(32)
@@ -264,28 +279,26 @@ class McpOAuthService(
     fun authorizationSuccessRedirect(
         request: McpAuthorizationRequest,
         code: String,
-    ): String =
-        buildString {
-            append(request.redirectUri)
-            append(if ('?' in request.redirectUri) '&' else '?')
-            append("code=")
-            append(code.urlEncode())
-            append("&state=")
-            append(request.state.urlEncode())
-        }
+    ): String = buildString {
+        append(request.redirectUri)
+        append(if ('?' in request.redirectUri) '&' else '?')
+        append("code=")
+        append(code.urlEncode())
+        append("&state=")
+        append(request.state.urlEncode())
+    }
 
     fun authorizationErrorRedirect(
         request: McpAuthorizationRequest,
         error: String,
-    ): String =
-        buildString {
-            append(request.redirectUri)
-            append(if ('?' in request.redirectUri) '&' else '?')
-            append("error=")
-            append(error.urlEncode())
-            append("&state=")
-            append(request.state.urlEncode())
-        }
+    ): String = buildString {
+        append(request.redirectUri)
+        append(if ('?' in request.redirectUri) '&' else '?')
+        append("error=")
+        append(error.urlEncode())
+        append("&state=")
+        append(request.state.urlEncode())
+    }
 
     fun tokenErrorResponse(exception: OAuthTokenException): ResponseEntity<Map<String, String>> {
         val headers = HttpHeaders()
@@ -293,12 +306,14 @@ class McpOAuthService(
             headers.set(HttpHeaders.WWW_AUTHENTICATE, "Basic realm=\"htmlshare\"")
         }
 
-        return ResponseEntity.status(exception.status).headers(headers).body(
-            buildMap {
-                put("error", exception.error)
-                put("error_description", exception.errorDescription)
-            },
-        )
+        return ResponseEntity.status(exception.status)
+            .headers(headers)
+            .body(
+                buildMap {
+                    put("error", exception.error)
+                    put("error_description", exception.errorDescription)
+                }
+            )
     }
 
     private fun authenticateClient(
@@ -313,19 +328,23 @@ class McpOAuthService(
                 ?.let { encoded ->
                     val decoded = String(Base64.getDecoder().decode(encoded), UTF_8)
                     val separator = decoded.indexOf(':')
-                    if (separator <
-                        0
-                    ) {
-                        throw OAuthTokenException("invalid_client", "Malformed basic authentication", HttpStatus.UNAUTHORIZED)
+                    if (separator < 0) {
+                        throw OAuthTokenException(
+                            "invalid_client",
+                            "Malformed basic authentication",
+                            HttpStatus.UNAUTHORIZED,
+                        )
                     }
                     decoded.substring(0, separator) to decoded.substring(separator + 1)
                 }
 
         val clientId =
-            basic?.first ?: clientIdParam?.takeIf { it.isNotBlank() }
+            basic?.first
+                ?: clientIdParam?.takeIf { it.isNotBlank() }
                 ?: throw OAuthTokenException("invalid_client", "Missing client authentication", HttpStatus.UNAUTHORIZED)
         val clientSecret =
-            basic?.second ?: clientSecretParam?.takeIf { it.isNotBlank() }
+            basic?.second
+                ?: clientSecretParam?.takeIf { it.isNotBlank() }
                 ?: throw OAuthTokenException("invalid_client", "Missing client secret", HttpStatus.UNAUTHORIZED)
 
         val client =
@@ -333,7 +352,11 @@ class McpOAuthService(
                 ?: throw OAuthTokenException("invalid_client", "Unknown client", HttpStatus.UNAUTHORIZED)
         val storedSecret =
             client.clientSecret
-                ?: throw OAuthTokenException("invalid_client", "Client secret is not configured", HttpStatus.UNAUTHORIZED)
+                ?: throw OAuthTokenException(
+                    "invalid_client",
+                    "Client secret is not configured",
+                    HttpStatus.UNAUTHORIZED,
+                )
 
         if (!passwordEncoder.matches(clientSecret, storedSecret)) {
             throw OAuthTokenException("invalid_client", "Client authentication failed", HttpStatus.UNAUTHORIZED)
@@ -355,9 +378,9 @@ class McpOAuthService(
     }
 
     private fun String.sha256UrlSafe(): String =
-        Base64.getUrlEncoder().withoutPadding().encodeToString(
-            MessageDigest.getInstance("SHA-256").digest(toByteArray(UTF_8)),
-        )
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(MessageDigest.getInstance("SHA-256").digest(toByteArray(UTF_8)))
 
     private fun String.urlEncode(): String = URLEncoder.encode(this, StandardCharsets.UTF_8)
 }

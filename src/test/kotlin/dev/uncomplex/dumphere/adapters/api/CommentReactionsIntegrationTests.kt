@@ -1,11 +1,15 @@
 package dev.uncomplex.dumphere.adapters.api
 
-import dev.uncomplex.dumphere.application.AuthenticatedUser
-import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.application.ArtifactVisibility
-import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
+import dev.uncomplex.dumphere.application.AuthenticatedUser
 import dev.uncomplex.dumphere.application.PageContentFormat
+import dev.uncomplex.dumphere.application.UserProvisioningService
+import dev.uncomplex.dumphere.ports.PublishedArtifactsStore
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.beans.factory.annotation.Autowired
@@ -24,50 +28,102 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
-@SpringBootTest(properties = [
-    "spring.security.oauth2.client.registration.google.client-id=test-client",
-    "spring.security.oauth2.client.registration.google.client-secret=test-secret",
-    "htmlshare.allowed-email-domain=example.com",
-])
+@SpringBootTest(
+    properties =
+        [
+            "spring.security.oauth2.client.registration.google.client-id=test-client",
+            "spring.security.oauth2.client.registration.google.client-secret=test-secret",
+            "htmlshare.allowed-email-domain=example.com",
+        ]
+)
 @AutoConfigureMockMvc
 class CommentReactionsIntegrationTests {
     @Autowired private lateinit var mvc: MockMvc
+
     @Autowired private lateinit var pages: PublishedArtifactsStore
+
     @Autowired private lateinit var users: UserProvisioningService
+
     @Autowired private lateinit var jdbc: JdbcTemplate
+
     @Autowired private lateinit var json: ObjectMapper
 
     companion object {
-        @JvmStatic @DynamicPropertySource
+        @JvmStatic
+        @DynamicPropertySource
         fun database(registry: DynamicPropertyRegistry) = PostgresTestDatabase.configure(registry)
     }
 
-    private fun member(subject: String = "reaction-alice") = oidcLogin().also {
-        users.provision(AuthenticatedUser(subject, "$subject@example.com", subject))
-    }.idToken {
-        it.subject(subject).claim("email", "$subject@example.com").claim("name", subject)
-    }
+    private fun member(subject: String = "reaction-alice") =
+        oidcLogin()
+            .also {
+                users.provision(AuthenticatedUser(subject, "$subject@example.com", subject))
+            }
+            .idToken {
+                it.subject(subject).claim("email", "$subject@example.com").claim("name", subject)
+            }
 
-    private fun artifact(): String = pages.publish("Reaction test", "# Review", PageContentFormat.MARKDOWN,
-        users.provision(AuthenticatedUser("reaction-owner", "owner@example.com", "Owner"))).id
+    private fun artifact(): String =
+        pages
+            .publish(
+                "Reaction test",
+                "# Review",
+                PageContentFormat.MARKDOWN,
+                users.provision(AuthenticatedUser("reaction-owner", "owner@example.com", "Owner")),
+            )
+            .id
 
-    private fun comment(id: String): Long = json.readTree(mvc.perform(post("/p/$id/comments")
-        .with(member()).with(csrf()).contentType("application/json")
-        .content("""{"body":"Review this","version":1}"""))
-        .andExpect(status().isCreated).andReturn().response.contentAsString).path("id").asLong()
+    private fun comment(id: String): Long =
+        json
+            .readTree(
+                mvc.perform(
+                        post("/p/$id/comments")
+                            .with(member())
+                            .with(csrf())
+                            .contentType("application/json")
+                            .content("""{"body":"Review this","version":1}""")
+                    )
+                    .andExpect(status().isCreated)
+                    .andReturn()
+                    .response
+                    .contentAsString
+            )
+            .path("id")
+            .asLong()
 
-    private fun react(id: String, comment: Long, emoji: String = "👍", reacted: Boolean = true, subject: String = "reaction-alice"): JsonNode =
-        json.readTree(mvc.perform(put("/p/$id/comments/$comment/reaction").with(member(subject)).with(csrf())
-            .contentType("application/json").content(json.writeValueAsString(mapOf("emoji" to emoji, "reacted" to reacted))))
-            .andExpect(status().isOk).andReturn().response.contentAsString)
+    private fun react(
+        id: String,
+        comment: Long,
+        emoji: String = "👍",
+        reacted: Boolean = true,
+        subject: String = "reaction-alice",
+    ): JsonNode =
+        json.readTree(
+            mvc.perform(
+                    put("/p/$id/comments/$comment/reaction")
+                        .with(member(subject))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content(json.writeValueAsString(mapOf("emoji" to emoji, "reacted" to reacted)))
+                )
+                .andExpect(status().isOk)
+                .andReturn()
+                .response
+                .contentAsString
+        )
 
-    private fun listed(id: String, subject: String = "reaction-alice"): JsonNode = json.readTree(mvc.perform(get("/p/$id/comments").with(member(subject)))
-        .andExpect(status().isOk).andReturn().response.contentAsString)
+    private fun listed(
+        id: String,
+        subject: String = "reaction-alice",
+    ): JsonNode =
+        json.readTree(
+            mvc.perform(get("/p/$id/comments").with(member(subject)))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response
+                .contentAsString
+        )
 
     @Test
     fun `different members share one counted emoji and see their own participation`() {
@@ -82,9 +138,19 @@ class CommentReactionsIntegrationTests {
         assertEquals("👍", reaction.path("emoji").asString())
         assertEquals(2, reaction.path("count").asInt())
         assertTrue(reaction.path("reacted").asBoolean())
-        assertEquals(listOf("reaction-alice", "reaction-bob"), reaction.path("users").toList().map { it.asString() })
+        assertEquals(
+            listOf("reaction-alice", "reaction-bob"),
+            reaction.path("users").toList().map { it.asString() },
+        )
         assertFalse(listed(id, "reaction-charlie")[0].path("reactions")[0].path("reacted").asBoolean())
-        assertEquals(2, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            2,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 
     @Test
@@ -96,9 +162,22 @@ class CommentReactionsIntegrationTests {
 
         val result = react(id, comment)
 
-        assertEquals(listOf("👍", "🎉"), result.path("reactions").toList().map { it.path("emoji").asString() })
-        assertEquals(listOf(1, 1), listed(id)[0].path("reactions").toList().map { it.path("count").asInt() })
-        assertEquals(2, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            listOf("👍", "🎉"),
+            result.path("reactions").toList().map { it.path("emoji").asString() },
+        )
+        assertEquals(
+            listOf(1, 1),
+            listed(id)[0].path("reactions").toList().map { it.path("count").asInt() },
+        )
+        assertEquals(
+            2,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 
     @Test
@@ -112,8 +191,18 @@ class CommentReactionsIntegrationTests {
 
         assertEquals(1, result.path("reactions")[0].path("count").asInt())
         assertFalse(listed(id)[0].path("reactions")[0].path("reacted").asBoolean())
-        assertEquals(listOf("reaction-bob"), listed(id)[0].path("reactions")[0].path("users").toList().map { it.asString() })
-        assertEquals(1, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            listOf("reaction-bob"),
+            listed(id)[0].path("reactions")[0].path("users").toList().map { it.asString() },
+        )
+        assertEquals(
+            1,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 
     @Test
@@ -127,7 +216,14 @@ class CommentReactionsIntegrationTests {
 
         assertTrue(result.path("reactions").isEmpty)
         assertTrue(listed(id)[0].path("reactions").isEmpty)
-        assertEquals(0, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 
     @Test
@@ -135,9 +231,20 @@ class CommentReactionsIntegrationTests {
         val id = artifact()
         val root = comment(id)
         val threadId = listed(id)[0].path("threadId").asLong()
-        val reply = json.readTree(mvc.perform(post("/p/$id/threads/$threadId/comments").with(member()).with(csrf())
-            .contentType("application/json").content("""{"body":"Reply","version":1}"""))
-            .andExpect(status().isCreated).andReturn().response.contentAsString)
+        val reply =
+            json.readTree(
+                mvc.perform(
+                        post("/p/$id/threads/$threadId/comments")
+                            .with(member())
+                            .with(csrf())
+                            .contentType("application/json")
+                            .content("""{"body":"Reply","version":1}""")
+                    )
+                    .andExpect(status().isCreated)
+                    .andReturn()
+                    .response
+                    .contentAsString
+            )
         val before = listed(id).toList()
 
         val result = react(id, reply.path("id").asLong(), "🎉")
@@ -149,7 +256,14 @@ class CommentReactionsIntegrationTests {
         assertEquals(before.map { it.path("editedAt") }, after.map { it.path("editedAt") })
         assertEquals(before.map { it.path("threadNumber") }, after.map { it.path("threadNumber") })
         assertTrue(after.single { it.path("id").asLong() == root }.path("reactions").isEmpty)
-        assertEquals(1, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, reply.path("id").asLong()))
+        assertEquals(
+            1,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                reply.path("id").asLong(),
+            ),
+        )
     }
 
     @ParameterizedTest(name = "reject unsupported emoji {0}")
@@ -158,11 +272,23 @@ class CommentReactionsIntegrationTests {
         val id = artifact()
         val comment = comment(id)
 
-        mvc.perform(put("/p/$id/comments/$comment/reaction").with(member()).with(csrf()).contentType("application/json")
-            .content(json.writeValueAsString(mapOf("emoji" to emoji, "reacted" to true))))
+        mvc.perform(
+                put("/p/$id/comments/$comment/reaction")
+                    .with(member())
+                    .with(csrf())
+                    .contentType("application/json")
+                    .content(json.writeValueAsString(mapOf("emoji" to emoji, "reacted" to true)))
+            )
             .andExpect(status().isBadRequest)
 
-        assertEquals(0, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 
     @Test
@@ -172,15 +298,28 @@ class CommentReactionsIntegrationTests {
         react(id, comment)
         pages.setVisibility(id, ArtifactVisibility.PUBLIC, null)
 
-        mvc.perform(put("/p/$id/comments/$comment/reaction").with(csrf()).contentType("application/json")
-            .content("""{"emoji":"🎉","reacted":true}"""))
+        mvc.perform(
+                put("/p/$id/comments/$comment/reaction")
+                    .with(csrf())
+                    .contentType("application/json")
+                    .content("""{"emoji":"🎉","reacted":true}""")
+            )
             .andExpect(status().isForbidden)
 
-        val publicComments = json.readTree(mvc.perform(get("/p/$id/comments"))
-            .andExpect(status().isOk).andReturn().response.contentAsString)
+        val publicComments =
+            json.readTree(
+                mvc.perform(get("/p/$id/comments")).andExpect(status().isOk).andReturn().response.contentAsString
+            )
         assertEquals(1, publicComments[0].path("reactions")[0].path("count").asInt())
         assertFalse(publicComments[0].path("reactions")[0].path("reacted").asBoolean())
-        assertEquals(1, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            1,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 
     @Test
@@ -188,11 +327,22 @@ class CommentReactionsIntegrationTests {
         val id = artifact()
         val comment = comment(id)
 
-        mvc.perform(put("/p/$id/comments/$comment/reaction").with(member()).contentType("application/json")
-            .content("""{"emoji":"👍","reacted":true}"""))
+        mvc.perform(
+                put("/p/$id/comments/$comment/reaction")
+                    .with(member())
+                    .contentType("application/json")
+                    .content("""{"emoji":"👍","reacted":true}""")
+            )
             .andExpect(status().isForbidden)
 
-        assertEquals(0, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 
     @Test
@@ -201,11 +351,23 @@ class CommentReactionsIntegrationTests {
         val comment = comment(id)
         val otherId = artifact()
 
-        mvc.perform(put("/p/$otherId/comments/$comment/reaction").with(member()).with(csrf()).contentType("application/json")
-            .content("""{"emoji":"👍","reacted":true}"""))
+        mvc.perform(
+                put("/p/$otherId/comments/$comment/reaction")
+                    .with(member())
+                    .with(csrf())
+                    .contentType("application/json")
+                    .content("""{"emoji":"👍","reacted":true}""")
+            )
             .andExpect(status().isNotFound)
 
-        assertEquals(0, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            0,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 
     @Test
@@ -215,11 +377,23 @@ class CommentReactionsIntegrationTests {
         react(id, comment)
         mvc.perform(delete("/p/$id/comments/$comment").with(member()).with(csrf())).andExpect(status().isNoContent)
 
-        mvc.perform(put("/p/$id/comments/$comment/reaction").with(member()).with(csrf()).contentType("application/json")
-            .content("""{"emoji":"🎉","reacted":true}"""))
+        mvc.perform(
+                put("/p/$id/comments/$comment/reaction")
+                    .with(member())
+                    .with(csrf())
+                    .contentType("application/json")
+                    .content("""{"emoji":"🎉","reacted":true}""")
+            )
             .andExpect(status().isNotFound)
 
         assertTrue(listed(id).isEmpty)
-        assertEquals(1, jdbc.queryForObject("select count(*) from comment_reactions where comment_id = ?", Int::class.java, comment))
+        assertEquals(
+            1,
+            jdbc.queryForObject(
+                "select count(*) from comment_reactions where comment_id = ?",
+                Int::class.java,
+                comment,
+            ),
+        )
     }
 }

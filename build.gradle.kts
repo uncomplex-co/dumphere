@@ -4,12 +4,14 @@ plugins {
     id("org.springframework.boot") version "4.1.2"
     id("io.spring.dependency-management") version "1.1.7"
     id("com.github.spotbugs") version "6.5.4"
-    id("com.diffplug.spotless") version "8.5.1"
+    id("com.diffplug.spotless") version "8.10.2"
     id("dev.detekt") version "2.0.0-alpha.6"
 }
 
 group = "dev.uncomplex.htmlshare"
+
 version = "0.1.0"
+
 description = "htmlshare"
 
 java {
@@ -48,7 +50,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
     implementation("io.micrometer:micrometer-registry-otlp")
-    implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.28.0-alpha")
+    implementation(
+        "io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.28.0-alpha"
+    )
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
     implementation("org.springframework.session:spring-session-jdbc")
     implementation("org.springframework.ai:spring-ai-starter-mcp-server-webmvc")
@@ -103,11 +107,11 @@ tasks.withType<com.github.spotbugs.snom.SpotBugsTask>().configureEach {
 
 spotless {
     kotlin {
-        ktlint()
+        ktfmt("0.63").kotlinlangStyle().configure { it.setMaxWidth(120) }
         target("src/**/*.kt")
     }
     kotlinGradle {
-        ktlint()
+        ktfmt("0.63").kotlinlangStyle()
         target("*.gradle.kts")
     }
 }

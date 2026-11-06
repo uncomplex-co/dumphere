@@ -2,14 +2,14 @@ package dev.uncomplex.dumphere.adapters.api
 
 import dev.uncomplex.dumphere.application.AllowedEmailDomainPolicy
 import dev.uncomplex.dumphere.application.SamePageAppProperties
-import org.springframework.mock.web.MockHttpServletRequest
-import org.springframework.mock.web.MockHttpServletResponse
-import org.springframework.security.authentication.TestingAuthenticationToken
-import org.springframework.security.oauth2.jwt.Jwt
 import kotlin.test.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.mock.web.MockHttpServletResponse
+import org.springframework.security.authentication.TestingAuthenticationToken
+import org.springframework.security.oauth2.jwt.Jwt
 
 class LoginControllerTests {
     private val controller = LoginController(allowedEmailDomainPolicy = policy())
@@ -23,7 +23,8 @@ class LoginControllerTests {
             loginRequest,
             loginResponse,
             authenticatedUser(),
-            "/oauth2/authorize?client_id=dumphere&redirect_uri=https%3A%2F%2Fexample.com%2Fcallback&response_type=code&state=abc",
+            "/oauth2/authorize?client_id=dumphere&redirect_uri=https%3A%2F%2Fexample.com%2Fcallback" +
+                "&response_type=code&state=abc",
         )
 
         val redirectedUrl = assertNotNull(loginResponse.redirectedUrl)
@@ -40,7 +41,13 @@ class LoginControllerTests {
         val loginRequest = MockHttpServletRequest("GET", "/login")
         val loginResponse = MockHttpServletResponse()
 
-        val result = controller.login(loginRequest, loginResponse, authenticatedUser(email = "user@blocked.test"), "/oauth2/authorize")
+        val result =
+            controller.login(
+                loginRequest,
+                loginResponse,
+                authenticatedUser(email = "user@blocked.test"),
+                "/oauth2/authorize",
+            )
 
         assertNull(loginResponse.redirectedUrl)
         assertNotNull(result)
@@ -63,12 +70,7 @@ class LoginControllerTests {
         }
 
     private fun jwt(email: String) =
-        Jwt
-            .withTokenValue("token")
-            .header("alg", "none")
-            .claim("sub", "user")
-            .claim("email", email)
-            .build()
+        Jwt.withTokenValue("token").header("alg", "none").claim("sub", "user").claim("email", email).build()
 
     private fun policy(domain: String = "example.com") =
         AllowedEmailDomainPolicy(
@@ -78,6 +80,6 @@ class LoginControllerTests {
                 allowedEmailDomain = domain,
                 apiUsername = "htmlshare",
                 apiPassword = "htmlshare", // betterleaks:allow -- Dummy test credential.
-            ),
+            )
         )
 }
