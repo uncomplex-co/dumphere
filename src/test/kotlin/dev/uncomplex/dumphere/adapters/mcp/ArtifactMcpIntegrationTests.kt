@@ -1,6 +1,5 @@
 package dev.uncomplex.dumphere.adapters.mcp
 
-import dev.uncomplex.dumphere.application.AuthenticatedUser
 import dev.uncomplex.dumphere.application.UserProvisioningService
 import dev.uncomplex.dumphere.testing.McpTestClient
 import dev.uncomplex.dumphere.testing.PostgresTestDatabase
@@ -24,7 +23,6 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
@@ -32,6 +30,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delet
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
 @SpringBootTest(
@@ -212,85 +211,29 @@ class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun `MCP comment reads include each emoji and its author on the correct comment`() {
         // Arrange
-        val token =
-            jwtEncoder
-                .encode(
-                    JwtEncoderParameters.from(
-                        JwtClaimsSet.builder()
-                            .subject("reaction-reading-agent")
-                            .claim("email", "agent@example.com")
-                            .claim("name", "Agent")
-                            .issuedAt(Instant.now())
-                            .expiresAt(Instant.now().plusSeconds(120))
-                            .build()
-                    )
-                )
-                .tokenValue
+        val token = reactionToken("reaction-reading-agent", "agent@example.com", "Agent")
+        val reviewerToken = reactionToken("reaction-reviewer", "reviewer@example.com", "Reviewer")
         McpTestClient(port, token, json).use { client ->
             client.initialize()
-            val id =
-                client
-                    .metadata(
-                        client.call(
-                            "publish_html",
-                            mapOf("contents" to "# Review", "format" to "markdown"),
-                        )
-                    )
-                    .path("id")
-                    .asString()
+            val id = reviewArtifact(client)
             val root = client.metadata(client.call("start_discussion_thread", mapOf("id" to id, "body" to "Root")))
             val thread = root.path("threadId").asLong()
-            val reply =
-                client.metadata(
-                    client.call(
-                        "reply_to_thread",
-                        mapOf("id" to id, "thread_id" to thread, "body" to "Reply"),
-                    )
-                )
-            val untouched =
-                client.metadata(
-                    client.call(
-                        "reply_to_thread",
-                        mapOf("id" to id, "thread_id" to thread, "body" to "No reactions"),
-                    )
-                )
-            mvc.perform(
-                    put("/p/$id/comments/${root.path("id").asLong()}/reaction")
-                        .header("Authorization", "Bearer $token")
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content("""{"emoji":"👍","reacted":true}""")
-                )
-                .andExpect(status().isOk)
-            users.provision(AuthenticatedUser("reaction-reviewer", "reviewer@example.com", "Reviewer"))
-            mvc.perform(
-                    put("/p/$id/comments/${root.path("id").asLong()}/reaction")
-                        .with(
-                            oidcLogin().idToken {
-                                it.subject("reaction-reviewer")
-                                    .claim("email", "reviewer@example.com")
-                                    .claim("name", "Reviewer")
-                            }
-                        )
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content("""{"emoji":"👍","reacted":true}""")
-                )
-                .andExpect(status().isOk)
-            mvc.perform(
-                    put("/p/$id/comments/${reply.path("id").asLong()}/reaction")
-                        .header("Authorization", "Bearer $token")
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content("""{"emoji":"🎉","reacted":true}""")
-                )
-                .andExpect(status().isOk)
+            val reply = reply(client, id, thread, "Reply")
+            val untouched = reply(client, id, thread, "No reactions")
+            react(id, root, "👍", token)
+            react(id, root, "👍", reviewerToken)
+            react(id, reply, "🎉", token)
 
             // Act
             val result = client.metadata(client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread)))
 
             // Assert
             val records = result.asArray().values().associateBy { it.path("id").asLong() }
+            assertEquals(3, result.size())
+            assertEquals(
+                setOf(root.path("id").asLong(), reply.path("id").asLong(), untouched.path("id").asLong()),
+                records.keys,
+            )
             assertEquals(
                 json.readTree("""[{"emoji":"👍","author":"Agent"},{"emoji":"👍","author":"Reviewer"}]"""),
                 records.getValue(root.path("id").asLong()).path("reactions"),
@@ -300,50 +243,16 @@ class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
                 records.getValue(reply.path("id").asLong()).path("reactions"),
             )
             assertTrue(records.getValue(untouched.path("id").asLong()).path("reactions").isEmpty)
-            assertEquals(
-                3,
-                jdbc.queryForObject(
-                    """
-                    select count(*) from comment_reactions r join comments c on c.id = r.comment_id
-                    where c.thread_id = ?
-                    """
-                        .trimIndent(),
-                    Int::class.java,
-                    thread,
-                ),
-            )
         }
     }
 
     @Test
     fun `MCP thread summaries include only their root comment's authored reactions`() {
         // Arrange
-        val token =
-            jwtEncoder
-                .encode(
-                    JwtEncoderParameters.from(
-                        JwtClaimsSet.builder()
-                            .subject("thread-reaction-agent")
-                            .claim("email", "agent@example.com")
-                            .claim("name", "Agent")
-                            .issuedAt(Instant.now())
-                            .expiresAt(Instant.now().plusSeconds(120))
-                            .build()
-                    )
-                )
-                .tokenValue
+        val token = reactionToken("thread-reaction-agent", "agent@example.com", "Agent")
         McpTestClient(port, token, json).use { client ->
             client.initialize()
-            val id =
-                client
-                    .metadata(
-                        client.call(
-                            "publish_html",
-                            mapOf("contents" to "# Review", "format" to "markdown"),
-                        )
-                    )
-                    .path("id")
-                    .asString()
+            val id = reviewArtifact(client)
             val root = client.metadata(client.call("start_discussion_thread", mapOf("id" to id, "body" to "Root")))
             val thread = root.path("threadId").asLong()
             val other =
@@ -353,41 +262,68 @@ class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
                         mapOf("id" to id, "body" to "Other root"),
                     )
                 )
-            val reply =
-                client.metadata(
-                    client.call(
-                        "reply_to_thread",
-                        mapOf("id" to id, "thread_id" to thread, "body" to "Reply"),
-                    )
-                )
-            mvc.perform(
-                    put("/p/$id/comments/${root.path("id").asLong()}/reaction")
-                        .header("Authorization", "Bearer $token")
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content("""{"emoji":"👍","reacted":true}""")
-                )
-                .andExpect(status().isOk)
-            mvc.perform(
-                    put("/p/$id/comments/${reply.path("id").asLong()}/reaction")
-                        .header("Authorization", "Bearer $token")
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content("""{"emoji":"🎉","reacted":true}""")
-                )
-                .andExpect(status().isOk)
+            val reply = reply(client, id, thread, "Reply")
+            react(id, root, "👍", token)
+            react(id, reply, "🎉", token)
+            assertEquals(
+                "🎉",
+                jdbc.queryForObject(
+                    "select emoji from comment_reactions where comment_id = ?",
+                    String::class.java,
+                    reply.path("id").asLong(),
+                ),
+            )
 
             // Act
             val result = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
 
             // Assert
             val summaries = result.asArray().values().associateBy { it.path("threadId").asLong() }
+            assertEquals(2, result.size())
+            assertEquals(setOf(thread, other.path("threadId").asLong()), summaries.keys)
             assertEquals(
                 json.readTree("""[{"emoji":"👍","author":"Agent"}]"""),
                 summaries.getValue(thread).path("reactions"),
             )
             assertTrue(summaries.getValue(other.path("threadId").asLong()).path("reactions").isEmpty)
         }
+    }
+
+    private fun reactionToken(subject: String, email: String, name: String): String {
+        val now = Instant.now()
+        return jwtEncoder
+            .encode(
+                JwtEncoderParameters.from(
+                    JwtClaimsSet.builder()
+                        .subject(subject)
+                        .claim("email", email)
+                        .claim("name", name)
+                        .issuedAt(now)
+                        .expiresAt(now.plusSeconds(120))
+                        .build()
+                )
+            )
+            .tokenValue
+    }
+
+    private fun reviewArtifact(client: McpTestClient): String =
+        client
+            .metadata(client.call("publish_html", mapOf("contents" to "# Review", "format" to "markdown")))
+            .path("id")
+            .asString()
+
+    private fun reply(client: McpTestClient, id: String, thread: Long, body: String): JsonNode =
+        client.metadata(client.call("reply_to_thread", mapOf("id" to id, "thread_id" to thread, "body" to body)))
+
+    private fun react(id: String, comment: JsonNode, emoji: String, token: String) {
+        mvc.perform(
+                put("/p/$id/comments/${comment.path("id").asLong()}/reaction")
+                    .header("Authorization", "Bearer $token")
+                    .with(csrf())
+                    .contentType("application/json")
+                    .content(json.writeValueAsString(mapOf("emoji" to emoji, "reacted" to true)))
+            )
+            .andExpect(status().isOk)
     }
 }
 

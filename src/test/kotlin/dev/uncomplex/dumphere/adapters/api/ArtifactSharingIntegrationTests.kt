@@ -1,5 +1,6 @@
 package dev.uncomplex.dumphere.adapters.api
 
+import dev.uncomplex.dumphere.application.ArtifactVisibility
 import dev.uncomplex.dumphere.application.AuthenticatedUser
 import dev.uncomplex.dumphere.application.PageContentFormat
 import java.net.URI
@@ -18,6 +19,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
@@ -723,69 +725,56 @@ class ArtifactSharingIntegrationTests : CommentMutationTestSupport() {
     @Test
     fun `replies preserve thread ownership and record their author and viewed version`() {
         // Arrange
-        val id = publish("<h1>Original</h1>")
-        setVisibility(id, "public")
-        val first =
-            json.readTree(
-                mvc.perform(
-                        post("/p/$id/comments")
-                            .with(csrf())
-                            .contentType("application/json")
-                            .content("""{"body":"First message","version":1}""")
-                    )
-                    .andExpect(status().isCreated)
-                    .andReturn()
-                    .response
-                    .contentAsString
-            )
+        val id = publish(ArtifactVisibility.PUBLIC)
+        val first = createComment(id, "First message", anonymous())
         val threadId = first.path("threadId").asLong()
-        mvc.perform(
-                post("/api/pages/$id/replace")
-                    .with(httpBasic("htmlshare", "htmlshare"))
-                    .contentType("text/html; charset=utf-8")
-                    .content("<h1>Updated</h1>")
-            )
-            .andExpect(status().isOk)
+        requireNotNull(pages.update(id, "<p>Updated</p>", null))
+        val identity = member()
+        val before = snapshot(id)
+        assertEquals(2, before.page["current_version"])
+        assertEquals(listOf(1, 2), before.versions.map { it["version"] })
+        assertNull(before.threads.single()["created_by_user_id"])
 
         // Act
-        val reply =
-            json.readTree(
-                mvc.perform(
-                        post("/p/$id/threads/$threadId/comments")
-                            .with(member())
-                            .with(csrf())
-                            .contentType("application/json")
-                            .content("""{"body":"Reply on the newer version","version":2}""")
-                    )
-                    .andExpect(status().isCreated)
-                    .andReturn()
-                    .response
-                    .contentAsString
-            )
+        val response =
+            mvc.perform(
+                    post("/p/$id/threads/$threadId/comments")
+                        .with(identity)
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("""{"body":"Reply on the newer version","version":2}""")
+                )
+                .andReturn()
+                .response
+
         // Assert
+        assertEquals(201, response.status)
+        val reply = json.readTree(response.contentAsString)
         assertEquals(threadId, reply.path("threadId").asLong())
+        assertEquals(1, reply.path("threadNumber").asInt())
         assertEquals("Alex Morgan", reply.path("author").asString())
+        assertEquals("Reply on the newer version", reply.path("body").asString())
         val stored =
             jdbc.queryForMap(
-                "select c.body, u.subject, cv.version as comment_version, tv.version as thread_version " +
-                    "from comments c join users u on u.id = c.author_user_id " +
-                    "join comment_threads t on t.id = c.thread_id " +
-                    "join html_page_versions cv on cv.id = c.created_in_version_id " +
-                    "join html_page_versions tv on tv.id = t.created_in_version_id where c.id = ?",
+                """
+                select c.body, c.thread_id, u.subject, cv.version as comment_version, tv.version as thread_version
+                from comments c join users u on u.id = c.author_user_id
+                join comment_threads t on t.id = c.thread_id
+                join html_page_versions cv on cv.id = c.created_in_version_id
+                join html_page_versions tv on tv.id = t.created_in_version_id where c.id = ?
+                """
+                    .trimIndent(),
                 reply.path("id").asLong(),
             )
         assertEquals("Reply on the newer version", stored["body"])
+        assertEquals(threadId, stored["thread_id"])
         assertEquals("different-team-member", stored["subject"])
         assertEquals(2, stored["comment_version"])
         assertEquals(1, stored["thread_version"])
-        assertEquals(
-            1,
-            jdbc.queryForObject(
-                "select count(*) from comment_threads where artifact_id = ?",
-                Int::class.java,
-                id,
-            ),
-        )
+        val after = snapshot(id)
+        assertEquals(2, after.comments.size)
+        assertEquals(before.comments.single(), after.comments.first())
+        assertEquals(before.copy(comments = after.comments), after)
     }
 
     @Test
