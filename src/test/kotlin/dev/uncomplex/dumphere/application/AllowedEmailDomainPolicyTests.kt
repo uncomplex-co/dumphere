@@ -12,30 +12,38 @@ import org.springframework.security.oauth2.jwt.Jwt
 class AllowedEmailDomainPolicyTests {
     @Test
     fun allowsAnyEmailWhenNoDomainIsConfigured() {
+        // Arrange
         val policy = policy("")
 
+        // Act & Assert
         assertTrue(policy.isAllowed(authentication(jwtPrincipal(email = "user@anywhere.test"))))
         assertTrue(policy.isAllowed(null as AuthenticatedUser?))
     }
 
     @Test
     fun allowsMatchingOidcEmail() {
+        // Arrange
         val policy = policy("example.com")
 
+        // Act & Assert
         assertTrue(policy.isAllowed(authentication(oidcPrincipal(email = "user@example.com"))))
     }
 
     @Test
     fun allowsMatchingJwtEmail() {
+        // Arrange
         val policy = policy("example.com")
 
+        // Act & Assert
         assertTrue(policy.isAllowed(authentication(jwtPrincipal(email = "user@example.com"))))
     }
 
     @Test
     fun rejectsNonMatchingOrMissingEmail() {
+        // Arrange
         val policy = policy("example.com")
 
+        // Act & Assert
         assertFalse(policy.isAllowed(authentication(jwtPrincipal(email = "user@blocked.test"))))
         assertFalse(policy.isAllowed(AuthenticatedUser(subject = "user-123")))
     }

@@ -83,6 +83,7 @@ abstract class ArtifactMcpTestSupport {
 class ArtifactMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun agentsPublishInspectShareEditAndRevokeWithoutRenewingAccess() {
+        // Arrange
         val now = Instant.now()
         val token =
             jwtEncoder
@@ -100,6 +101,7 @@ class ArtifactMcpIntegrationTests : ArtifactMcpTestSupport() {
 
         McpTestClient(port, token, json).use { client ->
             client.initialize()
+            // Act & Assert
             val published =
                 client.metadata(
                     client.call(
@@ -209,6 +211,7 @@ class ArtifactMcpIntegrationTests : ArtifactMcpTestSupport() {
 class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun `MCP comment reads include each emoji and its author on the correct comment`() {
+        // Arrange
         val token =
             jwtEncoder
                 .encode(
@@ -283,8 +286,10 @@ class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
                 )
                 .andExpect(status().isOk)
 
+            // Act
             val result = client.metadata(client.call("list_thread_comments", mapOf("id" to id, "thread_id" to thread)))
 
+            // Assert
             val records = result.asArray().values().associateBy { it.path("id").asLong() }
             assertEquals(
                 json.readTree("""[{"emoji":"👍","author":"Agent"},{"emoji":"👍","author":"Reviewer"}]"""),
@@ -312,6 +317,7 @@ class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
 
     @Test
     fun `MCP thread summaries include only their root comment's authored reactions`() {
+        // Arrange
         val token =
             jwtEncoder
                 .encode(
@@ -371,8 +377,10 @@ class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
                 )
                 .andExpect(status().isOk)
 
+            // Act
             val result = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
 
+            // Assert
             val summaries = result.asArray().values().associateBy { it.path("threadId").asLong() }
             assertEquals(
                 json.readTree("""[{"emoji":"👍","author":"Agent"}]"""),
@@ -386,6 +394,7 @@ class ArtifactReactionsMcpIntegrationTests : ArtifactMcpTestSupport() {
 class ArtifactDiscussionsMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun agentsDiscussArtifactsAcrossVersionsWithoutMixingThreadsOrChangingContent() {
+        // Arrange
         val token =
             jwtEncoder
                 .encode(
@@ -415,6 +424,7 @@ class ArtifactDiscussionsMcpIntegrationTests : ArtifactMcpTestSupport() {
                     .asString()
             val id = publish()
             val otherId = publish()
+            // Act & Assert
             val empty = client.metadata(client.call("list_discussion_threads", mapOf("id" to id)))
             assertTrue(empty.isArray)
             assertEquals(0, empty.size())
@@ -805,6 +815,7 @@ class ArtifactDiscussionsMcpIntegrationTests : ArtifactMcpTestSupport() {
 class ArtifactMetadataMcpIntegrationTests : ArtifactMcpTestSupport() {
     @Test
     fun customMetadataPreservesTypesSupportsSingleKeyUpdatesAndRemovalWithoutChangingArtifactVersions() {
+        // Arrange
         val token =
             jwtEncoder
                 .encode(
@@ -820,6 +831,7 @@ class ArtifactMetadataMcpIntegrationTests : ArtifactMcpTestSupport() {
                 .tokenValue
         McpTestClient(port, token, json).use { client ->
             client.initialize()
+            // Act & Assert
             val schema =
                 client
                     .listTools()
@@ -997,127 +1009,5 @@ class ArtifactMetadataMcpIntegrationTests : ArtifactMcpTestSupport() {
                 ),
             )
         }
-    }
-
-    @Test
-    fun artifactMetadataReturnsCreatorAndUpdaterProfilesAndNestedVisibility() {
-        fun token(
-            subject: String,
-            email: String,
-            name: String,
-        ) =
-            jwtEncoder
-                .encode(
-                    JwtEncoderParameters.from(
-                        JwtClaimsSet.builder()
-                            .subject(subject)
-                            .claim("email", email)
-                            .claim("name", name)
-                            .issuedAt(Instant.now())
-                            .expiresAt(Instant.now().plusSeconds(120))
-                            .build()
-                    )
-                )
-                .tokenValue
-        McpTestClient(
-                port,
-                token("metadata-creator", "creator@example.com", "Original Creator"),
-                json,
-            )
-            .use { creator ->
-                creator.initialize()
-                val published =
-                    creator.metadata(
-                        creator.call(
-                            "publish_html",
-                            mapOf("contents" to "<p>Profiles</p>", "format" to "html"),
-                        )
-                    )
-                val id = published.path("id").asString()
-                val expectedCreator = json.readTree("""{"email":"creator@example.com","name":"Original Creator"}""")
-                assertEquals(expectedCreator, published.path("createdBy"))
-                assertTrue(published.path("updatedBy").isNull)
-                assertTrue(published.path("visibility").isObject)
-                assertEquals("internal", published.path("visibility").path("visibility").asString())
-                assertTrue(published.path("visibility").path("publicUntil").isNull)
-                assertTrue(!published.has("publicUntil"))
-                val read = creator.metadata(creator.call("get_artifact_metadata", mapOf("id" to id)))
-                assertEquals(expectedCreator, read.path("createdBy"))
-
-                McpTestClient(
-                        port,
-                        token("metadata-editor", "editor@example.com", "Different Editor"),
-                        json,
-                    )
-                    .use { editor ->
-                        editor.initialize()
-                        val expectedEditor =
-                            json.readTree("""{"email":"editor@example.com","name":"Different Editor"}""")
-                        val updated =
-                            editor.metadata(
-                                editor.call(
-                                    "update_html",
-                                    mapOf("id" to id, "contents" to "<p>Updated</p>"),
-                                )
-                            )
-                        assertEquals(expectedCreator, updated.path("createdBy"))
-                        assertEquals(expectedEditor, updated.path("updatedBy"))
-                        val shared =
-                            editor.metadata(
-                                editor.call(
-                                    "set_artifact_visibility",
-                                    mapOf("id" to id, "visibility" to "public"),
-                                )
-                            )
-                        assertTrue(shared.path("visibility").isObject)
-                        assertEquals(
-                            "public",
-                            shared.path("visibility").path("visibility").asString(),
-                        )
-                        assertEquals(
-                            deadline(id),
-                            Instant.parse(shared.path("visibility").path("publicUntil").asString()),
-                        )
-                        assertEquals(expectedCreator, shared.path("createdBy"))
-                        assertEquals(expectedEditor, shared.path("updatedBy"))
-                        val withCustomMetadata =
-                            editor.metadata(
-                                editor.call(
-                                    "set_artifact_metadata",
-                                    mapOf("id" to id, "key" to "origin", "value" to "MCP"),
-                                )
-                            )
-                        assertEquals(expectedCreator, withCustomMetadata.path("createdBy"))
-                        assertEquals(expectedEditor, withCustomMetadata.path("updatedBy"))
-                        assertEquals(
-                            "metadata-creator",
-                            jdbc.queryForObject(
-                                """
-                                select u.subject from html_pages p join users u on u.id = p.created_by_user_id
-                                where p.id = ?
-                                """
-                                    .trimIndent(),
-                                String::class.java,
-                                id,
-                            ),
-                        )
-                        assertEquals(
-                            "metadata-editor",
-                            jdbc.queryForObject(
-                                """
-                                select u.subject from html_pages p join users u on u.id = p.updated_by_user_id
-                                where p.id = ?
-                                """
-                                    .trimIndent(),
-                                String::class.java,
-                                id,
-                            ),
-                        )
-                        val reread = creator.metadata(creator.call("get_artifact_metadata", mapOf("id" to id)))
-                        assertEquals(expectedCreator, reread.path("createdBy"))
-                        assertEquals(expectedEditor, reread.path("updatedBy"))
-                        assertEquals(shared.path("visibility"), reread.path("visibility"))
-                    }
-            }
     }
 }

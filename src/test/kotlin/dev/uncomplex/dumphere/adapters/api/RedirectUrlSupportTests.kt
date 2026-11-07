@@ -10,9 +10,11 @@ import org.springframework.mock.web.MockHttpServletRequest
 class RedirectUrlSupportTests {
     @Test
     fun preservesLiteralPlusSignsAndEncodedValuesAcrossBothLoginRedirects() {
+        // Arrange
         val target =
             "/oauth2/authorize?scope=openid+email+profile&state=a%2Bb" +
                 "&redirect_uri=http%3A%2F%2Flocalhost%2Fcallback"
+        // Act & Assert
         for (url in
             listOf(
                 RedirectUrlSupport.loginUrl(target),
@@ -30,14 +32,17 @@ class RedirectUrlSupportTests {
 
     @Test
     fun storesRedirectUrlByStateIdInSession() {
+        // Arrange
         val request = MockHttpServletRequest()
 
+        // Act
         RedirectUrlSupport.remember(
             requireNotNull(request.session),
             "state-1",
             "/oauth2/consent?state=abc",
         )
 
+        // Assert
         assertEquals(
             "/oauth2/consent?state=abc",
             RedirectUrlSupport.take(request.session, "state-1"),
@@ -47,6 +52,7 @@ class RedirectUrlSupportTests {
 
     @Test
     fun rejectsAbsoluteRedirectUrl() {
+        // Act & Assert
         assertNull(RedirectUrlSupport.sanitize("https://evil.example/phish"))
     }
 }

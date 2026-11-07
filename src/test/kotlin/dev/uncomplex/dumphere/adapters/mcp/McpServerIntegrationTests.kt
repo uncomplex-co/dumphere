@@ -47,12 +47,14 @@ class McpServerIntegrationTests {
 
     @Test
     fun publicJwksNeverIncludesPrivateKeyMaterial() {
+        // Act
         val response =
             HttpClient.newHttpClient()
                 .send(
                     HttpRequest.newBuilder(URI.create("http://localhost:$port/oauth2/jwks")).GET().build(),
                     HttpResponse.BodyHandlers.ofString(),
                 )
+        // Assert
         assertEquals(200, response.statusCode())
         val keys = mapper.readTree(response.body()).required("keys").asArray().values().toList()
         assertEquals(1, keys.size)
@@ -69,6 +71,7 @@ class McpServerIntegrationTests {
 
     @Test
     fun authenticatesAndListsToolsAndReturnsToolErrors() {
+        // Arrange
         val token =
             jwtEncoder
                 .encode(
@@ -82,6 +85,7 @@ class McpServerIntegrationTests {
                 )
                 .tokenValue
         val client = HttpClient.newHttpClient()
+        // Act & Assert
         val initialized =
             post(
                 client,

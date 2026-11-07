@@ -68,11 +68,13 @@ class McpOAuthServiceTests {
 
     @Test
     fun omitsMissingProfileClaimsFromAccessAndRefreshedTokens() {
+        // Act & Assert
         verifyTokenClaims(AuthenticatedUser(subject = UUID.randomUUID().toString()))
     }
 
     @Test
     fun preservesProfileClaimsInAccessAndRefreshedTokens() {
+        // Act & Assert
         verifyTokenClaims(
             AuthenticatedUser(
                 subject = UUID.randomUUID().toString(),
@@ -83,9 +85,12 @@ class McpOAuthServiceTests {
     }
 
     private fun verifyTokenClaims(user: AuthenticatedUser) {
+        // Arrange
         val (client, access) = issue(user)
+        // Act
         val refreshed = service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret")
 
+        // Assert
         assertNotEquals(access.refreshToken, refreshed.refreshToken)
         for (result in listOf(access, refreshed)) {
             val jwt = decoder.decode(result.accessToken)
@@ -102,7 +107,9 @@ class McpOAuthServiceTests {
 
     @Test
     fun persistsOnlyHashesWithThirtyDayExpiryAndRotatesAcrossServiceInstances() {
+        // Arrange
         val before = Instant.now()
+        // Act & Assert
         val (client, access) = issue(AuthenticatedUser("persistent-user", "user@example.com", "Persistent User"))
         val hashes =
             jdbc.queryForList(
@@ -161,7 +168,9 @@ class McpOAuthServiceTests {
 
     @Test
     fun rejectsExpiredTokensAndBadClientCredentialsWithoutConsumingValidTokens() {
+        // Arrange
         val (client, access) = issue(AuthenticatedUser("expiry-user"))
+        // Act & Assert
         assertFailsWith<OAuthTokenException> {
             service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "wrong-secret")
         }
@@ -189,8 +198,10 @@ class McpOAuthServiceTests {
 
     @Test
     fun onlyOneConcurrentRefreshCanConsumeAToken() {
+        // Arrange
         val (client, access) = issue(AuthenticatedUser("concurrent-user"))
         val start = CountDownLatch(1)
+        // Act & Assert
         Executors.newFixedThreadPool(2).use { executor ->
             val attempts =
                 (1..2).map {
@@ -225,16 +236,19 @@ class McpOAuthServiceTests {
 
     @Test
     fun refusesToIssueTokensForAnIdentityThatIsNotASystemUser() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val before =
             jdbc.queryForObject(
                 "select count(*) from mcp_refresh_tokens where expires_at > current_timestamp",
                 Int::class.java,
             )
+        // Act & Assert
         val error =
             assertFailsWith<OAuthTokenException> {
                 issue(AuthenticatedUser(subject), provisionUser = false)
             }
+        // Assert
         assertEquals("invalid_grant", error.error)
         assertNull(users.findBySubject(subject))
         assertEquals(
@@ -248,6 +262,7 @@ class McpOAuthServiceTests {
 
     @Test
     fun deletingAUserCascadesToTheirRefreshTokensAndPreventsRefresh() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val (client, access) = issue(AuthenticatedUser(subject))
         val userId = requireNotNull(users.findBySubject(subject)?.id)
@@ -259,7 +274,9 @@ class McpOAuthServiceTests {
                 hash(access.refreshToken),
             ),
         )
+        // Act
         users.deleteById(userId)
+        // Assert
         assertEquals(
             0,
             jdbc.queryForObject(
@@ -282,6 +299,7 @@ class McpOAuthServiceTests {
 
     @Test
     fun refreshedClaimsComeFromTheCurrentUserRowNotTheOriginalLoginSnapshot() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val (client, access) = issue(AuthenticatedUser(subject, "old@example.com", "Old Name"))
         jdbc.update(
@@ -290,7 +308,9 @@ class McpOAuthServiceTests {
             "New Name",
             subject,
         )
+        // Act
         val refreshed = service.exchangeRefreshToken(access.refreshToken, null, client.clientId, "test-secret")
+        // Assert
         val jwt = decoder.decode(refreshed.accessToken)
         assertEquals("new@example.com", jwt.getClaimAsString("email"))
         assertEquals("New Name", jwt.getClaimAsString("name"))

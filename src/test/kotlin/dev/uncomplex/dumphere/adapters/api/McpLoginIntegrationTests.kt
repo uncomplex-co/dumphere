@@ -74,6 +74,7 @@ class McpLoginIntegrationTests {
 
     @Test
     fun loggedOutMcpAuthorizationResumesAtConsentAfterGoogleCallback() {
+        // Arrange
         val clientId = UUID.randomUUID().toString()
         clients.save(
             RegisteredClient.withId(clientId)
@@ -114,6 +115,7 @@ class McpLoginIntegrationTests {
             "/oauth2/authorize?response_type=code&client_id=$clientId" +
                 "&redirect_uri=http%3A%2F%2F127.0.0.1%3A9999%2Fcallback&state=mcp-state" +
                 "&code_challenge=$challenge&code_challenge_method=S256&scope=openid+email+profile"
+        // Act & Assert
         val login = get(location(get(target)))
         assertEquals(200, login.statusCode())
         val googleLink =

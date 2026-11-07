@@ -88,6 +88,7 @@ class AuthenticatedUsersIntegrationTests {
 
     @Test
     fun `comments polling resolves the persisted user without saving or applying session claims`() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         provisioning.provision(AuthenticatedUser(subject, "original@example.com", "Original name"))
         val id = artifact()
@@ -97,10 +98,12 @@ class AuthenticatedUsersIntegrationTests {
                 it.subject(subject).claim("email", "different@example.com").claim("name", "Different name")
             }
 
+        // Act & Assert
         repeat(3) {
             mvc.perform(get("/p/$id/comments").with(session)).andExpect(status().isOk)
         }
 
+        // Assert
         // xmin changes on every PostgreSQL row update, even if the assigned values happen to be
         // identical.
         assertEquals(before, snapshot(subject))
@@ -108,9 +111,11 @@ class AuthenticatedUsersIntegrationTests {
 
     @Test
     fun `a session without a provisioned user fails instead of creating a user on GET`() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val id = artifact()
 
+        // Act & Assert
         mvc.perform(
                 get("/p/$id/comments")
                     .with(
@@ -121,6 +126,7 @@ class AuthenticatedUsersIntegrationTests {
             )
             .andExpect(status().isUnauthorized)
 
+        // Assert
         assertEquals(
             0,
             jdbc.queryForObject(
@@ -133,11 +139,14 @@ class AuthenticatedUsersIntegrationTests {
 
     @Test
     fun `successful Google authentication provisions a user before controller resolution`() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val authentication = googleAuthentication(subject, "Google member")
 
+        // Act
         events.publishEvent(AuthenticationSuccessEvent(authentication))
 
+        // Assert
         assertEquals("Google member", snapshot(subject)["display_name"])
         val id = artifact()
         mvc.perform(get("/p/$id/comments").with(oidcLogin().oidcUser(authentication.principal as DefaultOidcUser)))
@@ -146,24 +155,30 @@ class AuthenticatedUsersIntegrationTests {
 
     @Test
     fun `repeated successful authentication with an unchanged profile does not update the user row`() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val authentication = googleAuthentication(subject, "Google member")
         events.publishEvent(AuthenticationSuccessEvent(authentication))
         val before = snapshot(subject)
 
+        // Act
         events.publishEvent(AuthenticationSuccessEvent(authentication))
 
+        // Assert
         assertEquals(before, snapshot(subject))
     }
 
     @Test
     fun `successful authentication saves a changed profile without creating another user`() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         events.publishEvent(AuthenticationSuccessEvent(googleAuthentication(subject, "Original name")))
         val before = snapshot(subject)
 
+        // Act
         events.publishEvent(AuthenticationSuccessEvent(googleAuthentication(subject, "Updated name")))
 
+        // Assert
         val after = snapshot(subject)
         assertEquals(before["id"], after["id"])
         assertEquals("Updated name", after["display_name"])
@@ -173,6 +188,7 @@ class AuthenticatedUsersIntegrationTests {
 
     @Test
     fun `real bearer authentication provisions once and repeated polling does not write`() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val now = Instant.now()
         val token =
@@ -193,16 +209,19 @@ class AuthenticatedUsersIntegrationTests {
         mvc.perform(get("/p/$id/comments").header("Authorization", "Bearer $token")).andExpect(status().isOk)
         val before = snapshot(subject)
 
+        // Act & Assert
         repeat(3) {
             mvc.perform(get("/p/$id/comments").header("Authorization", "Bearer $token")).andExpect(status().isOk)
         }
 
+        // Assert
         assertEquals("Bearer member", before["display_name"])
         assertEquals(before, snapshot(subject))
     }
 
     @Test
     fun `authentication from a disallowed Google domain does not provision a user`() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val now = Instant.now()
         val token =
@@ -214,8 +233,10 @@ class AuthenticatedUsersIntegrationTests {
             )
         val authentication = OAuth2AuthenticationToken(DefaultOidcUser(emptyList(), token), emptyList(), "google")
 
+        // Act
         events.publishEvent(AuthenticationSuccessEvent(authentication))
 
+        // Assert
         assertEquals(
             0,
             jdbc.queryForObject(
@@ -228,6 +249,7 @@ class AuthenticatedUsersIntegrationTests {
 
     @Test
     fun `failed bearer authentication does not provision a user`() {
+        // Arrange
         val subject = UUID.randomUUID().toString()
         val now = Instant.now()
         val token =
@@ -245,8 +267,10 @@ class AuthenticatedUsersIntegrationTests {
                 .tokenValue
         val id = artifact()
 
+        // Act & Assert
         mvc.perform(get("/p/$id/comments").header("Authorization", "Bearer $token")).andExpect(status().isUnauthorized)
 
+        // Assert
         assertEquals(
             0,
             jdbc.queryForObject(
@@ -259,6 +283,7 @@ class AuthenticatedUsersIntegrationTests {
 
     @Test
     fun `real Basic authentication provisions the API actor before publication`() {
+        // Act & Assert
         val response =
             mvc.perform(
                     post("/api/pages")

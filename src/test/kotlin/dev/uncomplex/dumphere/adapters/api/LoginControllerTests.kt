@@ -16,9 +16,11 @@ class LoginControllerTests {
 
     @Test
     fun redirectsAuthenticatedUserToRedirectUrlWithQueryStringIntact() {
+        // Arrange
         val loginRequest = MockHttpServletRequest("GET", "/login")
         val loginResponse = MockHttpServletResponse()
 
+        // Act
         controller.login(
             loginRequest,
             loginResponse,
@@ -27,6 +29,7 @@ class LoginControllerTests {
                 "&response_type=code&state=abc",
         )
 
+        // Assert
         val redirectedUrl = assertNotNull(loginResponse.redirectedUrl)
 
         assertTrue(redirectedUrl.startsWith("/oauth2/authorize?"))
@@ -38,9 +41,11 @@ class LoginControllerTests {
 
     @Test
     fun doesNotRedirectAuthenticatedUserWhenEmailDomainIsNotAllowed() {
+        // Arrange
         val loginRequest = MockHttpServletRequest("GET", "/login")
         val loginResponse = MockHttpServletResponse()
 
+        // Act
         val result =
             controller.login(
                 loginRequest,
@@ -49,17 +54,21 @@ class LoginControllerTests {
                 "/oauth2/authorize",
             )
 
+        // Assert
         assertNull(loginResponse.redirectedUrl)
         assertNotNull(result)
     }
 
     @Test
     fun ignoresUnsafeRedirectUrl() {
+        // Arrange
         val loginRequest = MockHttpServletRequest("GET", "/login")
         val loginResponse = MockHttpServletResponse()
 
+        // Act
         val body = controller.login(loginRequest, loginResponse, null, "https://evil.example/phish")
 
+        // Assert
         assertNotNull(body)
         assertTrue(body.contains("href=\"/oauth2/authorization/google\""))
     }

@@ -61,11 +61,14 @@ class ArtifactReplacementIntegrationTests {
         format: PageContentFormat,
         mediaType: String,
     ) {
+        // Arrange
         val original = pages.publish("Original title", "Original document", format, null)
         val content = "Complete replacement ✓"
 
+        // Act
         val response = send("POST", "/api/pages/${original.id}/replace", content, "$mediaType; charset=utf-8")
 
+        // Assert
         assertEquals(200, response.statusCode(), response.body())
         val metadata = json.readTree(response.body())
         assertEquals(original.id, metadata.path("id").asString())
@@ -110,10 +113,13 @@ class ArtifactReplacementIntegrationTests {
 
     @Test
     fun `replacement of a missing artifact returns not found without creating it`() {
+        // Arrange
         val id = "missing-replacement-artifact"
 
+        // Act
         val response = send("POST", "/api/pages/$id/replace", "Replacement")
 
+        // Assert
         assertEquals(404, response.statusCode(), response.body())
         assertEquals(
             0,
@@ -135,8 +141,10 @@ class ArtifactReplacementIntegrationTests {
 
     @Test
     fun `a JSON envelope is rejected without changing content`() {
+        // Arrange
         val original = pages.publish("Original", "Original document", PageContentFormat.HTML, null)
 
+        // Act
         val response =
             send(
                 "POST",
@@ -145,6 +153,7 @@ class ArtifactReplacementIntegrationTests {
                 "application/json",
             )
 
+        // Assert
         assertEquals(415, response.statusCode(), response.body())
         assertEquals(
             1,
@@ -166,8 +175,10 @@ class ArtifactReplacementIntegrationTests {
 
     @Test
     fun `the old PUT route is unavailable and does not replace content`() {
+        // Arrange
         val original = pages.publish("Original", "Original document", PageContentFormat.HTML, null)
 
+        // Act
         val response =
             send(
                 "PUT",
@@ -176,6 +187,7 @@ class ArtifactReplacementIntegrationTests {
                 "application/json",
             )
 
+        // Assert
         assertEquals(405, response.statusCode(), response.body())
         assertEquals(
             1,

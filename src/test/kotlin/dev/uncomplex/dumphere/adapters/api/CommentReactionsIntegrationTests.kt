@@ -127,12 +127,15 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `different members share one counted emoji and see their own participation`() {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
         react(id, comment)
 
+        // Act
         val result = react(id, comment, subject = "reaction-bob")
 
+        // Assert
         assertEquals(2, result.path("reactions")[0].path("count").asInt())
         val reaction = listed(id)[0].path("reactions")[0]
         assertEquals("👍", reaction.path("emoji").asString())
@@ -155,13 +158,16 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `repeated add is idempotent and a person may use multiple emojis`() {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
         react(id, comment)
         react(id, comment, "🎉")
 
+        // Act
         val result = react(id, comment)
 
+        // Assert
         assertEquals(
             listOf("👍", "🎉"),
             result.path("reactions").toList().map { it.path("emoji").asString() },
@@ -182,13 +188,16 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `removing your reaction preserves another member's reaction`() {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
         react(id, comment)
         react(id, comment, subject = "reaction-bob")
 
+        // Act
         val result = react(id, comment, reacted = false)
 
+        // Assert
         assertEquals(1, result.path("reactions")[0].path("count").asInt())
         assertFalse(listed(id)[0].path("reactions")[0].path("reacted").asBoolean())
         assertEquals(
@@ -207,13 +216,16 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `removing the last vote deletes the reaction and repeated removal is harmless`() {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
         react(id, comment)
         react(id, comment, reacted = false)
 
+        // Act
         val result = react(id, comment, reacted = false)
 
+        // Assert
         assertTrue(result.path("reactions").isEmpty)
         assertTrue(listed(id)[0].path("reactions").isEmpty)
         assertEquals(
@@ -228,6 +240,7 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `replies accept reactions without changing comment content timestamps or thread numbers`() {
+        // Arrange
         val id = artifact()
         val root = comment(id)
         val threadId = listed(id)[0].path("threadId").asLong()
@@ -247,8 +260,10 @@ class CommentReactionsIntegrationTests {
             )
         val before = listed(id).toList()
 
+        // Act
         val result = react(id, reply.path("id").asLong(), "🎉")
 
+        // Assert
         assertEquals(reply.path("id").asLong(), result.path("commentId").asLong())
         val after = listed(id).toList()
         assertEquals(before.map { it.path("body") }, after.map { it.path("body") })
@@ -269,9 +284,11 @@ class CommentReactionsIntegrationTests {
     @ParameterizedTest(name = "reject unsupported emoji {0}")
     @ValueSource(strings = ["👍🏽", "not an emoji", "", "👍👍"])
     fun `only default emojis in the bundled catalog can be stored`(emoji: String) {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
 
+        // Act & Assert
         mvc.perform(
                 put("/p/$id/comments/$comment/reaction")
                     .with(member())
@@ -281,6 +298,7 @@ class CommentReactionsIntegrationTests {
             )
             .andExpect(status().isBadRequest)
 
+        // Assert
         assertEquals(
             0,
             jdbc.queryForObject(
@@ -293,11 +311,13 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `anonymous public readers can see reactions but cannot add them`() {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
         react(id, comment)
         pages.setVisibility(id, ArtifactVisibility.PUBLIC, null)
 
+        // Act & Assert
         mvc.perform(
                 put("/p/$id/comments/$comment/reaction")
                     .with(csrf())
@@ -306,6 +326,7 @@ class CommentReactionsIntegrationTests {
             )
             .andExpect(status().isForbidden)
 
+        // Assert
         val publicComments =
             json.readTree(
                 mvc.perform(get("/p/$id/comments")).andExpect(status().isOk).andReturn().response.contentAsString
@@ -324,9 +345,11 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `reaction writes require CSRF`() {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
 
+        // Act & Assert
         mvc.perform(
                 put("/p/$id/comments/$comment/reaction")
                     .with(member())
@@ -335,6 +358,7 @@ class CommentReactionsIntegrationTests {
             )
             .andExpect(status().isForbidden)
 
+        // Assert
         assertEquals(
             0,
             jdbc.queryForObject(
@@ -347,10 +371,12 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `a comment cannot be reacted to through another artifact`() {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
         val otherId = artifact()
 
+        // Act & Assert
         mvc.perform(
                 put("/p/$otherId/comments/$comment/reaction")
                     .with(member())
@@ -360,6 +386,7 @@ class CommentReactionsIntegrationTests {
             )
             .andExpect(status().isNotFound)
 
+        // Assert
         assertEquals(
             0,
             jdbc.queryForObject(
@@ -372,11 +399,13 @@ class CommentReactionsIntegrationTests {
 
     @Test
     fun `deleted comments hide reactions and reject new votes`() {
+        // Arrange
         val id = artifact()
         val comment = comment(id)
         react(id, comment)
         mvc.perform(delete("/p/$id/comments/$comment").with(member()).with(csrf())).andExpect(status().isNoContent)
 
+        // Act & Assert
         mvc.perform(
                 put("/p/$id/comments/$comment/reaction")
                     .with(member())
@@ -386,6 +415,7 @@ class CommentReactionsIntegrationTests {
             )
             .andExpect(status().isNotFound)
 
+        // Assert
         assertTrue(listed(id).isEmpty)
         assertEquals(
             1,

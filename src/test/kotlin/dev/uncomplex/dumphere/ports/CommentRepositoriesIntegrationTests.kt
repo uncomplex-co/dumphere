@@ -46,6 +46,7 @@ class CommentRepositoriesIntegrationTests {
 
     @Test
     fun `anonymous thread and first comment retain their version and XPath after artifact updates`() {
+        // Arrange
         val artifactId = UUID.randomUUID().toString()
         val now = Instant.parse("2026-10-24T12:00:00Z")
         val version = createArtifact(artifactId, now)
@@ -77,6 +78,7 @@ class CommentRepositoriesIntegrationTests {
                 }
             )
 
+        // Act
         versions.save(
             HtmlPageVersionEntity(
                 pageId = artifactId,
@@ -88,6 +90,7 @@ class CommentRepositoriesIntegrationTests {
         )
         jdbc.update("update html_pages set current_version = 2 where id = ?", artifactId)
 
+        // Assert
         val threadId = assertNotNull(thread.id)
         val stored = threads.findById(threadId).orElseThrow()
         assertEquals(version.id, stored.createdInVersionId)
@@ -103,6 +106,7 @@ class CommentRepositoriesIntegrationTests {
 
     @Test
     fun `document-level thread supports authenticated replies from different versions in chronological order`() {
+        // Arrange
         val artifactId = UUID.randomUUID().toString()
         val now = Instant.parse("2026-10-24T12:00:00Z")
         val firstVersion = createArtifact(artifactId, now)
@@ -145,6 +149,7 @@ class CommentRepositoriesIntegrationTests {
             )
 
         val threadId = assertNotNull(thread.id)
+        // Act
         val reply =
             comments.save(
                 CommentEntity(
@@ -156,6 +161,7 @@ class CommentRepositoriesIntegrationTests {
                 )
             )
 
+        // Assert
         assertEquals(
             listOf(threadId),
             threads.findAllByArtifactIdOrderByCreatedAtAscIdAsc(artifactId).map { it.id },

@@ -42,6 +42,7 @@ class JdbcMcpSigningKeysTests {
 
     @Test
     fun newInstancesReuseThePersistedKeyAndValidatePreviouslyIssuedAccessTokens() {
+        // Arrange
         val original = JdbcMcpSigningKeys(JdbcTemplate(dataSource)).loadOrCreate()
         val config = AuthorizationServerConfig()
         val now = Instant.now()
@@ -59,7 +60,10 @@ class JdbcMcpSigningKeysTests {
                 )
                 .tokenValue
 
+        // Act
         val reloaded = JdbcMcpSigningKeys(JdbcTemplate(dataSource)).loadOrCreate()
+
+        // Assert
         assertEquals(original.keyID, reloaded.keyID)
         assertTrue(original.toRSAPrivateKey().encoded.contentEquals(reloaded.toRSAPrivateKey().encoded))
         assertEquals("restart-user", config.jwtDecoder(JWKSet(reloaded)).decode(token).subject)
@@ -71,7 +75,9 @@ class JdbcMcpSigningKeysTests {
 
     @Test
     fun concurrentFirstStartupsAllUseTheSamePersistedKey() {
+        // Arrange
         val start = CountDownLatch(1)
+        // Act
         Executors.newFixedThreadPool(4).use { executor ->
             val attempts =
                 (1..4).map {
@@ -81,6 +87,7 @@ class JdbcMcpSigningKeysTests {
                     }
                 }
             start.countDown()
+            // Assert
             assertEquals(1, attempts.map { it.get(20, TimeUnit.SECONDS) }.toSet().size)
         }
         assertEquals(
@@ -91,7 +98,9 @@ class JdbcMcpSigningKeysTests {
 
     @Test
     fun corruptStoredKeysFailInsteadOfSilentlyReplacingTheSigningIdentity() {
+        // Arrange
         jdbc.update("insert into mcp_signing_keys (key_name, private_jwk) values ('active', '{}')")
+        // Act & Assert
         assertFails { JdbcMcpSigningKeys(jdbc).loadOrCreate() }
         assertEquals(
             "{}",

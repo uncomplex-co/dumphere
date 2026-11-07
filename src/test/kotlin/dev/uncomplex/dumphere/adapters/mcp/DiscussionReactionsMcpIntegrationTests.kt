@@ -118,11 +118,14 @@ class DiscussionReactionsMcpIntegrationTests {
 
     @Test
     fun `adding through MCP stores the authenticated author and appears in both discussion reads`() {
+        // Arrange
         client("Alice").use { client ->
             val discussion = discussion(client)
 
+            // Act
             val result = client.metadata(client.call("add_comment_reaction", discussion.arguments()))
 
+            // Assert
             val expected = json.readTree("""[{"emoji":"👍","author":"Alice"}]""")
             assertEquals(discussion.root, result.path("commentId").asLong())
             assertEquals(expected, result.path("reactions"))
@@ -141,6 +144,7 @@ class DiscussionReactionsMcpIntegrationTests {
 
     @Test
     fun `MCP can react to replies without attaching the reaction to the root`() {
+        // Arrange
         client("Alice").use { client ->
             val discussion = discussion(client)
             val reply =
@@ -156,6 +160,7 @@ class DiscussionReactionsMcpIntegrationTests {
                 )
             val replyId = reply.path("id").asLong()
 
+            // Act
             val result =
                 client.metadata(
                     client.call(
@@ -168,6 +173,7 @@ class DiscussionReactionsMcpIntegrationTests {
                     )
                 )
 
+            // Assert
             val expected = json.readTree("""[{"emoji":"🎉","author":"Alice"}]""")
             assertEquals(expected, result.path("reactions"))
             val records = comments(client, discussion)
@@ -179,12 +185,15 @@ class DiscussionReactionsMcpIntegrationTests {
 
     @Test
     fun `adding the same MCP reaction twice is idempotent`() {
+        // Arrange
         client("Alice").use { client ->
             val discussion = discussion(client)
             client.call("add_comment_reaction", discussion.arguments())
 
+            // Act
             val result = client.metadata(client.call("add_comment_reaction", discussion.arguments()))
 
+            // Assert
             assertEquals(
                 json.readTree("""[{"emoji":"👍","author":"Alice"}]"""),
                 result.path("reactions"),
@@ -196,14 +205,17 @@ class DiscussionReactionsMcpIntegrationTests {
 
     @Test
     fun `MCP removal affects only the caller's vote`() {
+        // Arrange
         client("Alice").use { alice ->
             client("Bob").use { bob ->
                 val discussion = discussion(alice)
                 alice.call("add_comment_reaction", discussion.arguments())
                 bob.call("add_comment_reaction", discussion.arguments())
 
+                // Act
                 val result = alice.metadata(alice.call("remove_comment_reaction", discussion.arguments()))
 
+                // Assert
                 val expected = json.readTree("""[{"emoji":"👍","author":"Bob"}]""")
                 assertEquals(expected, result.path("reactions"))
                 assertEquals(expected, comments(bob, discussion)[0].path("reactions"))
@@ -214,13 +226,16 @@ class DiscussionReactionsMcpIntegrationTests {
 
     @Test
     fun `removing an absent MCP reaction is idempotent`() {
+        // Arrange
         client("Alice").use { client ->
             val discussion = discussion(client)
             client.call("add_comment_reaction", discussion.arguments())
             client.call("remove_comment_reaction", discussion.arguments())
 
+            // Act
             val result = client.metadata(client.call("remove_comment_reaction", discussion.arguments()))
 
+            // Assert
             assertTrue(result.path("reactions").isEmpty)
             assertTrue(comments(client, discussion)[0].path("reactions").isEmpty)
             assertEquals(0, count(discussion.root))
@@ -230,11 +245,14 @@ class DiscussionReactionsMcpIntegrationTests {
     @ParameterizedTest(name = "reject unsupported MCP emoji {0}")
     @ValueSource(strings = ["👍🏽", "not emoji", "", "👍👍"])
     fun `MCP rejects unsupported and skin-tone emojis`(emoji: String) {
+        // Arrange
         client("Alice").use { client ->
             val discussion = discussion(client)
 
+            // Act & Assert
             client.call("add_comment_reaction", discussion.arguments(emoji), expectError = true)
 
+            // Assert
             assertTrue(comments(client, discussion)[0].path("reactions").isEmpty)
             assertEquals(0, count(discussion.root))
         }
@@ -243,13 +261,16 @@ class DiscussionReactionsMcpIntegrationTests {
     @ParameterizedTest(name = "{0} rejects another artifact's comment")
     @ValueSource(strings = ["add_comment_reaction", "remove_comment_reaction"])
     fun `MCP reaction writes enforce artifact ownership`(tool: String) {
+        // Arrange
         client("Alice").use { client ->
             val discussion = discussion(client)
             client.call("add_comment_reaction", discussion.arguments())
             val other = publish(client)
 
+            // Act & Assert
             client.call(tool, discussion.arguments() + ("id" to other), expectError = true)
 
+            // Assert
             assertEquals(
                 json.readTree("""[{"emoji":"👍","author":"Alice"}]"""),
                 comments(client, discussion)[0].path("reactions"),
@@ -261,6 +282,7 @@ class DiscussionReactionsMcpIntegrationTests {
     @ParameterizedTest(name = "{0} rejects deleted comments")
     @ValueSource(strings = ["add_comment_reaction", "remove_comment_reaction"])
     fun `MCP reaction writes reject deleted comments`(tool: String) {
+        // Arrange
         client("Alice").use { client ->
             val discussion = discussion(client)
             client.call("add_comment_reaction", discussion.arguments())
@@ -271,8 +293,10 @@ class DiscussionReactionsMcpIntegrationTests {
                 )
                 .andExpect(status().isNoContent)
 
+            // Act & Assert
             client.call(tool, discussion.arguments(), expectError = true)
 
+            // Assert
             assertEquals(1, count(discussion.root))
             assertTrue(client.metadata(client.call("list_discussion_threads", mapOf("id" to discussion.id))).isEmpty)
         }
